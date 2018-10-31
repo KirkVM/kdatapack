@@ -5,7 +5,7 @@ setup(
     description='data/science-related libraries',
     author="Kirk Vander Meulen",
     author_email="kirk.vandermeulen@gmail.com",
-    packages=["kmslib","dfitlib","dreadlib"],
+    packages=["kmslib","dfitlib","tecanpack"],
     install_requires=[],
     scripts=[]
 )

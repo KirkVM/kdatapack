@@ -13,10 +13,11 @@ class WellReading:
     expfname: str = None
     expsheet: str = None
     volume: float = None
-    detection: str =None #dns, bca, etc
-    wellid: str =None #A1-H12
+    detection: str = None #dns, bca, etc
+    wellid: str = None #A1-H12
     predvlp_dlnfactor: float = 1.0
     postdvlp_dlnfactor: float = 1.0
+    experimenter: str = None
 
 @dataclass
 class WellRxnReading(WellReading):
@@ -27,10 +28,13 @@ class WellRxnReading(WellReading):
     incubator: str = None
     rxntemp: float = None
     rxnph: float = None
+    rxnvol: float = None
+    rxnvol_units: str = None
     buffername: str = None
     bufferconc: float = None
     bufferconc_units: str = None
     solutionstr: str = None
+    biorepid: str = None #uuid (hex-rep) reflecting uniquely prepared biosamples
 
 @dataclass
 class WellEnzymeSubstrateReading(WellRxnReading):
@@ -141,11 +145,14 @@ def describe_wells(defaultsdict,
     List of WellReadings or appropriate subclass
     """
     wellreads_=[] #this is the list we'll build
-    if itermethod!='byrow_wrap':
+    if itermethod not in ['byrow_wrap','bycol_wrap']:
         print('itermethod not implemented yet..')
         return None
     #defaulting to byrow_wrap-
-    allwids_=[''.join(x) for x in itertools.product(prows,[str(x) for x in pcols])]
+    if itermethod=='byrow_wrap':
+        allwids_=[''.join(x) for x in itertools.product(prows,[str(x) for x in pcols])]
+    elif itermethod=='bycol_wrap':
+        allwids_=[''.join(x[::-1]) for x in itertools.product([str(x) for x in pcols],prows)]
     wids_=[x for x in allwids_ if x not in skipwells]
     #iterate through wids_, build a WellReading for each--
     #use defaultsdict but override with one of optional list arguments if present
@@ -155,6 +162,8 @@ def describe_wells(defaultsdict,
         well_dict['wellid']=wid
         if enames is not None:
             well_dict['ename']=enames[widx]
+        if econcs is not None:
+            well_dict['econc']=econcs[widx]
         if snames is not None:
             well_dict['sname']=snames[widx]
         if standardconcs is not None:
