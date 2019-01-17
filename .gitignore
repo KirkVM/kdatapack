@@ -10,3 +10,4 @@
 *.tab
 *.tar.gz
 .vscode
+__pycache__/
