@@ -146,7 +146,7 @@ def parsepage(plinkstr,kingdom=None):
     return czes_
 
 
-def pullfamily(famname):
+def scrape_cazyfam(famname):
     accRE=re.compile("protein\&.*val=(.+)")
     famselect=famname+"_all"
     addlpagesRE=re.compile("{0}\.html\?debut_PRINC=(\d+)\#pagination_PRINC".format(famselect))
@@ -196,4 +196,4 @@ def pullfamily(famname):
 
 if __name__=="__main__":
 #    parsepage("http://www.cazy.org/GH5_all.html")
-    pullfamily('GH5')
+    scrape_cazyfam('GH5')

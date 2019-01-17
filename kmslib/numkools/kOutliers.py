@@ -77,21 +77,3 @@ def dixon2(val_list):
 		range=max(val_list)-min(val_list)
 		df=min(len(val_list),5) 
 	return indices
-
-
-#    rateArray=numpy.array(values)
-#    sdArray=numpy.array(sdlist)
-##    sdArray=numpy.array(map(lambda x,y:math.sqrt(x**2.+y**2.),sdArray,sdsampleArray))#math.sqrt(sdArray**2.+sdsampleArray**2.)
-#    sdArray[:]=max(max(sdlist),max(values)-min(values))
-#    df=len(values)
-#    avg,sd=kAveraging.weighted_avg_stdev(rateArray,sdArray)
-#    #for entry in values:
-#    ##testing upper then lower 
-#    upperG=(max(values)-avg)/sd
-#    lowerG=(avg-min(values))/sd
-#    tstat=dists.t.ppf(.95,df) #90% confidence
-#    grubbsVal=((df-1)/math.sqrt(df))*math.sqrt(tstat/(df-2+tstat))
-#    print "coolstuff",values,upperG,lowerG,grubbsVal
-#    print sdArray
-#        values.append(entry[1])
-        

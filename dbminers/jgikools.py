@@ -14,14 +14,6 @@ metadatafields_=['Temperature Range','Oxygen Requirement','Isolation','Isolation
 metadatafields_.extend(['Ecosystem','Ecosystem Category','Ecosystem Type','Habitat','Host Name','Biotic Relationships'])
 metadatafields_.extend(['Specific Ecosystem','Sporulation','Sample Body Site','Sample Body Subsite'])
 
-
-
-
-
-metadatafields_=['Temperature Range','Oxygen Requirement','Isolation','Isolation Country']
-metadatafields_.extend(['Ecosystem','Ecosystem Category','Ecosystem Type','Habitat','Host Name','Biotic Relationships'])
-metadatafields_.extend(['Specific Ecosystem','Sporulation','Sample Body Site','Sample Body Subsite'])
-
 def scrape_jgi_imgpage(localhtmlfpath):
 #    infoRE=re.compile("NCBI Taxon ID")
 #    myparser=etree.HTMLParser()#encoding="UTF-8")
@@ -57,20 +49,4 @@ def scrape_jgi_imgpage(localhtmlfpath):
                         val=None
                 if val is not None and len(val)>0:
                     catHT[key]=val
-
-#                val=tr.find('td').string
-#                if val is not None:
-#                    val=val.strip()
-
-#                if tr.find('td'):
-#                    key=tr.find('th').string
-#                    if key is not None:
-#                        key=key.strip()
-#                    val=tr.find('td').string
-#                    if val is not None:
-#                        val=val.strip()
-#                        if key in catHT.keys():
-#                            if [key,catHT[key]] not in overlaps_:
-#                                overlaps_.append([key,catHT[key]])
-#                            overlaps_.append([key,val])
     return catHT
