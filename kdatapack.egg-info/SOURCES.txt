@@ -1,13 +1,13 @@
+setup.py
 dfitlib/__init__.py
 dfitlib/fitstats.py
 dfitlib/freq_fitting.py
 dfitlib/mlsampling.py
-dreadlib/__init__.py
-dreadlib/kirkreadscripts.py
-dreadlib/lilreadscripts.py
-dreadlib/tecanio.py
 kdatapack.egg-info/PKG-INFO
 kdatapack.egg-info/SOURCES.txt
 kdatapack.egg-info/dependency_links.txt
 kdatapack.egg-info/top_level.txt
 kmslib/__init__.py
+tecanpack/__init__.py
+tecanpack/activity_calcs.py
+tecanpack/tecanio.py

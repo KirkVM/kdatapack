@@ -1,28 +1,9 @@
 import numpy as np
 import random
 
-#def get_resample_old(thelist,wtdA_=None):
-#    '''takes an array or list and optionally a weighting array (wtdA_=...)
-#    and returns a resampled with replacement version with the selections
-#    weighted accordingly'''
-#    if wtdA_ is None:wtdA_=np.ones((len(thelist)))
-#    wtdSumA_=np.zeros((len(thelist)))
-#    for x in range(len(wtdA_)):
-#        wtdSumA_[x:]+=wtdA_[x]
-#    newsample_=[]
-#    for x in range(len(thelist)):
-#        randval=random.random()*wtdSumA_[len(wtdSumA_)-1]       
-#        for y in range(len(wtdSumA_)):
-#            if randval<wtdSumA_[y]:
-#                newsample_.append(thelist[y])
-#                break
-##    return np.array(newsample_)
-#    return newsample_
-
-import pdb
 def get_resample(vals_,wtdA_=None,valsrvs_=None):
-    """Returns resampled array/list. 
-    
+    """Returns resampled array/list.
+
     Args:
         vals: list of vals/entries. Agnostic on contents
     Optional Args and Defaults
@@ -30,7 +11,7 @@ def get_resample(vals_,wtdA_=None,valsrvs_=None):
         valsrvs_=None. the rv_continuous probability distribution for each corresponding value
             in vals. simply calls the rv .cdf method to sample from that distribution
     """
-    thelist=vals_[:] #start by making a copy of the list. 
+    thelist=vals_[:] #start by making a copy of the list.
     if valsrvs_ is not None:
         thelist=[]
         for x0,litems in enumerate(vals_):
@@ -44,7 +25,7 @@ def get_resample(vals_,wtdA_=None,valsrvs_=None):
                 #rvslist=[rvs]
                 litems=[litems]
                 rvs=[rvs]
-            newentrys=[] 
+            newentrys=[]
             for x1,litem in enumerate(litems):
                 #rv=rvslist[x1]
                 rv=rvs[x1]
@@ -64,7 +45,7 @@ def get_resample(vals_,wtdA_=None,valsrvs_=None):
         wtdSumA_[x:]+=wtdA_[x]
     newsample_=[]
     for x in range(len(thelist)):
-        randval=random.random()*wtdSumA_[len(wtdSumA_)-1]       
+        randval=random.random()*wtdSumA_[len(wtdSumA_)-1]
         for y in range(len(wtdSumA_)):
             if randval<wtdSumA_[y]:
                 newsample_.append(thelist[y])
@@ -72,9 +53,9 @@ def get_resample(vals_,wtdA_=None,valsrvs_=None):
 #    return np.array(newsample_)
     return newsample_
 
-def get_resample_weird(vals_,wtdA_=None,valsrvs_=None):
-    """Returns resampled array/list. 
-    
+def get_resample_old(vals_,wtdA_=None,valsrvs_=None):
+    """Returns resampled array/list.
+
     Args:
         vals: list of vals/entries. Agnostic on contents
     Optional Args and Defaults
@@ -82,7 +63,7 @@ def get_resample_weird(vals_,wtdA_=None,valsrvs_=None):
         valsrvs_=None. the rv_continuous probability distribution for each corresponding value
             in vals. simply calls the rv .cdf method to sample from that distribution
     """
-    thelist=vals_[:] #start by making a copy of the list. 
+    thelist=vals_[:] #start by making a copy of the list.
     if valsrvs_ is not None:
         thelist=[]
         for x0,litems in enumerate(vals_):
@@ -96,18 +77,16 @@ def get_resample_weird(vals_,wtdA_=None,valsrvs_=None):
                 #rvslist=[rvs]
                 litems=[litems]
                 rvs=[rvs]
-            newentrys=[] 
+            newentrys=[]
             for x1,litem in enumerate(litems):
                 #rv=rvslist[x1]
                 rv=rvs[x1]
-                if rv is not None:
-                    #selection should be 0.01-0.99 (obv should use a different random module)
-                    randval=max(0.01,float(int(random.random()*100))/100)
-                    sampledval=rv.ppf(randval)
-#                   print(randval,sampledval,rv.kwds)
-                    newentrys.append(sampledval)
-                else:
-                    newentrys.append(litem)
+
+                #selection should be 0.01-0.99 (obv should use a different random module)
+                randval=max(0.01,float(int(random.random()*100))/100)
+                sampledval=rv.ppf(randval)
+#                print(randval,sampledval,rv.kwds)
+                newentrys.append(sampledval)
             #if each entry is a single item, revert to a single value-
             if len(newentrys)==1: newentrys=newentrys[0]
             thelist.append(newentrys)
@@ -118,13 +97,14 @@ def get_resample_weird(vals_,wtdA_=None,valsrvs_=None):
         wtdSumA_[x:]+=wtdA_[x]
     newsample_=[]
     for x in range(len(thelist)):
-        randval=random.random()*wtdSumA_[len(wtdSumA_)-1]       
+        randval=random.random()*wtdSumA_[len(wtdSumA_)-1]
         for y in range(len(wtdSumA_)):
             if randval<wtdSumA_[y]:
                 newsample_.append(thelist[y])
                 break
 #    return np.array(newsample_)
     return newsample_
+
 def wtdresample(npA_,wtdA_=None,iters=100):
     samples_=[]
     for x in range(iters):
@@ -158,9 +138,9 @@ class KBSParams:
     def add_param_sampleAHT(self,pname,sampleA_):
         self.param_sampleAHT[pname]=sampleA_
     def add_ciplot(self,xcA_,ylcA_,yucA_):
-        self.xconfA_=xcA_ 
-        self.ylconfA_=ylcA_ 
-        self.yuconfA_=yucA_ 
+        self.xconfA_=xcA_
+        self.ylconfA_=ylcA_
+        self.yuconfA_=yucA_
 
 def get_linearKBSP(intsA_,slopesA_,lconf=10,uconf=90,getciplot=True,ciplotlen=100,
         cix_start_stop=None):
@@ -183,7 +163,7 @@ def get_linearKBSP(intsA_,slopesA_,lconf=10,uconf=90,getciplot=True,ciplotlen=10
             for x in range(len(boundxA_)):
                 curYA_[x]=a+boundxA_[x]*b
             bsys_.append(curYA_)
-            
+
         # for each position in plot,
         # make an array then add percentile to corresponding plot
         bsmaxYA_=np.zeros((len(boundxA_)))

@@ -5,7 +5,7 @@ from typing import List,Iterable,Callable
 
 class NLRegression:
     """Wraps scipy curve_fit and stores fit stats and visualization data"""
-    def __init__(self,fitfunc:callable,xvals:List[float],yvals:Iterable):
+    def __init__(self,fitfunc:callable,xvals:List[float],yvals:List[float]):
         """"Builds NLRegression"""
         self.xvals=xvals
         self.yvals=yvals

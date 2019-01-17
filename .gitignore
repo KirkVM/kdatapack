@@ -9,7 +9,4 @@
 *.ai
 *.tab
 *.tar.gz
-pwid_df.pkl
-pwid_df2.pkl
-pwid_df3.pkl
-
+.vscode
