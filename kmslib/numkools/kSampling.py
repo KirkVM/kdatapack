@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import sklearn
 
 def get_resample(vals_,wtdA_=None,valsrvs_=None):
     """Returns resampled array/list.
@@ -25,7 +26,7 @@ def get_resample(vals_,wtdA_=None,valsrvs_=None):
                 #rvslist=[rvs]
                 litems=[litems]
                 rvs=[rvs]
-            newentrys=[]
+            newentrys=[] #
             for x1,litem in enumerate(litems):
                 #rv=rvslist[x1]
                 rv=rvs[x1]
