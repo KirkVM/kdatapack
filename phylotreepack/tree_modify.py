@@ -83,9 +83,10 @@ def cladecluster_bysimilarity(treefpath,pwiddf_fpath,outgroup,cluster_minpwid,
     print(newtreefpath)
     t.write(outfile=newtreefpath,features=['name'])
 
-def ete_cladecluster_bynumber(treefpath:str,cluster_maxsize:int,merge_orphans:bool=False,orphan_size:int=2,\
+def ete_cladecluster_bysize(treefpath:str,cluster_maxsize:int,merge_sister_orphans:bool=False,orphan_size:int=5,\
                               outgroup:str=None):
-    """reads in a newick tree file, groups sets of leaf nodes and truncates tree at common ancestor
+    """reads in a newick tree file, groups sets of leaf nodes and truncates tree at common ancestor.
+    merge_sister_orphans options can be useful just for visualization purposes if tree has many polytomies
     
     Arguments:
     treefpath: str representing path to newick tree file
@@ -111,6 +112,7 @@ def ete_cladecluster_bynumber(treefpath:str,cluster_maxsize:int,merge_orphans:bo
     orphans=[]
     tovisit_=[t]
     print(len(t.get_leaf_names()))
+    newnodes=0
     while(len(tovisit_)>0):
         node=tovisit_.pop()
         lnames=node.get_leaf_names()
@@ -119,107 +121,50 @@ def ete_cladecluster_bynumber(treefpath:str,cluster_maxsize:int,merge_orphans:bo
             groupaccs_=node.get_leaf_names()
 #            print(f'building a new leaf group: {len(groupaccs_)} lnodes')
             node.add_feature("accs",groupaccs_)
-#            node.name='cool'
+#            node.add_feature('subtree',node.detach)
+            node.name=f'cool {len(groupaccs_)}, {node.get_distance(node.up)}'
+            newnodes+=len(groupaccs_) 
             if len(groupaccs_)>orphan_size:
                 clusters.append(node)
             else:
                 orphans.append(node)
             nc=node.children[:]
-            for c in nc:#node.children:
+#            for c in nc:#node.children:
 #                c.detach()
-                pass
+#            node.name='cool'
         else:
             tovisit_.extend(node.children)
 #    for orph in orphans:
 #        print(orph)
-    for n in t.traverse():
-        print(n)
+    #for n in t.traverse():
+    print(newnodes)
+#    print(t)
     #lengthier part is merging orphan clusters into larger
+    if merge_sister_orphans:
     #first sort orphans so smallest group is last-
     orphans.sort(key=lambda x:len(x.accs),reverse=True)#)#attrgetter('accs'))
-    while(len(orphans)>0):
+    #try to merge sister orphans first
+    while(len(orphans)>0 ):
         cur_orphan=orphans.pop()
         groupaccs_=cur_orphan.accs
-        mergenode,_=cur_orphan.get_closest_leaf(topology_only=True)
-        groupaccs_.extend(mergenode.accs)
-        #newleaf=t.get_common_ancestor(groupaccs_)
-        newleaf=cur_orphan.get_common_ancestor(mergenode)
-        newleaf.add_feature('accs',groupaccs_)
-        for clstrpos,clstr in enumerate(clusters):
-#            print(clstr,mergenode)
-            if clstr==mergenode:
-                print('cluster merge')
-                clusters.pop(clstrpos)
-        for orphpos,orph in enumerate(orphans):
-#            print(orph,mergenode)
-            if orph==mergenode:
-                print('orph merge')
-                orphans.pop(orphpos)
-        nc=newleaf.children[:]
-        for c in nc:#node.children:
-            newleaf.remove_child(c)
-        if len(groupaccs_)>orphan_size:
-            clusters.append(newleaf)
-        else:
-            orphans.append(newleaf)
-        if len(orphans)>0:
-            orphans.sort(key=lambda x:len(x.accs),reverse=True)#)#attrgetter('accs'))
-#    print(len(orphans))
-    clusters.sort(key=lambda x:len(x.accs))#)#attrgetter('accs'))
-    endnumaccs=0
-    for c in clusters:
-#        print(len(c.accs))
-        endnumaccs+=len(c.accs)
-    print(endnumaccs)
-#        distances=[[lnode,cur_orphan.get_closest_leaf()]]
-#        orphans.po
-#        break
-
-
-
-    #
-    #clusternodes_=[]
-    #orphanleaves_=[]
-    #totalaccs=0
-#    for node in t.traverse():
-#        if node.is_leaf():
-#            numaccs=len(set(node.accs))
-#            if numaccs<orphan_size:
-#                orphans.append(node)
-#            else:
-#                clusters.append(node)
-    #            clusternodes_.append(node)
-    #            totalaccs+=numaccs
-    #        except:
-    #            orphanleaves_.append(node)
-    
-#    for orphanleaf in orphanleaves_:
-#        orphacc=orphanleaf.name
-#        bestcluster=None
-#        bestcluster_pwid=0.0
-#        for clusternode in clusternodes_:
-#            clusteraccs_=clusternode.accs
-#            sub_pwdf=pwid_df.loc[orphacc,clusteraccs_]
-#            avgpwid=sub_pwdf.mean()
-#            if avgpwid>bestcluster_pwid:
-#                bestcluster_pwid=avgpwid
-##                bestcluster=clusternode
-#        bestcluster.accs.append(orphacc)
-#        orphanleaf.delete()#detach()
-#
-#    for node in t.traverse():
-#        #print(node.is_root(),len(node.children),node.is_leaf())
-#        try:
-#            print(len(node.accs))
-#            accstr='cluster|'+node.accs[0]
-#            for acc in node.accs[1:]:accstr+='|'+acc
-#            node.add_feature('name',accstr)
-#        except:
-#            pass
-#    newtreefpath=os.path.join(os.path.split(treefpath)[0],"newtree.nw")
-#    print(newtreefpath)
-#    t.write(outfile=newtreefpath,features=['name'])
-
+#        print(len(cur_orphan.get_sisters()))
+        sisters=[n for n in cur_orphan.get_sisters() if (n.is_leaf() and n in orphans)]
+        sisters.sort(key=lambda x:len(x.accs))
+        if len(sisters)>0:
+            mergenode=sisters[0] 
+            mergenode.accs.extend(cur_orphan.accs)
+            mergenode.name=f'mcool {len(mergenode.accs)}, {node.get_distance(node.up)}'
+            cur_orphan.detach()
+        for orphnum,orph in enumerate(orphans):
+            if len(orph.accs)>orphan_size:
+                clusters.append(orphans.pop(orphnum))
+        orphans.sort(key=lambda x:len(x.accs),reverse=True)#)#attrgetter('accs'))
+#        print(len(sisters))
+    t.ladderize()
+    print(t)
+    return
+    #add merge with nephew orphan?
+    print(len(t.get_leaf_names()))
 
 
 
