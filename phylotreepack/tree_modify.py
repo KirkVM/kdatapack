@@ -1,5 +1,6 @@
 import os,yaml,argparse
 import pandas as pd
+import numpy as np
 from ete3 import Tree
 
 def clusterstats(t,pwdf):
@@ -83,88 +84,85 @@ def cladecluster_bysimilarity(treefpath,pwiddf_fpath,outgroup,cluster_minpwid,
     print(newtreefpath)
     t.write(outfile=newtreefpath,features=['name'])
 
-def ete_cladecluster_bysize(treefpath:str,cluster_maxsize:int,merge_sister_orphans:bool=False,orphan_size:int=5,\
-                              outgroup:str=None):
+def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=5,\
+                            collapse_sisters:bool=True,outgroup:str=None):
     """reads in a newick tree file, groups sets of leaf nodes and truncates tree at common ancestor.
     merge_sister_orphans options can be useful just for visualization purposes if tree has many polytomies
     
     Arguments:
     treefpath: str representing path to newick tree file
-    cluster_maxsize: maximum size for each cluster
     
     Keyword Arguments:
-    merge_orphans: whether to merge single nodes into nearest cluster (default True)
-    orphan_size: minimum cluster size that would be merged (default=2)
+    cluster_maxsize: maximum size for each cluster (default=50)
+    cluster_minsize: minimum size for each cluster (default=5)
+    collapse_sisters: whether to merge leaves or groups<threshold into a single branch (default True)
+    outgroup: node (default=None)
     
     Returns: 
-    ete tree file with feature 'name' for leaf nodes, set to "cluster|acc1|acc2|..."
+    ete tree file with added feature 'subtrees' and 'cluster_numleaves' for collapsed nodes, 
+    which correspond to a list of child nodes and number of leaves in the cluster
     """
     print(f'reading newick file {treefpath}')
     t=Tree(treefpath)
     if outgroup is not None:
         t.set_outgroup(t&outgroup)
-    #print(len(t.get_leaf_names()))
-    #pwid_df=pd.read_pickle(pwiddf_fpath)
-#    tovisit_.append(rnode)
 
     #Breadth-First Tree Traversal, stop when no.leaves<cluster_maxsize
     clusters=[]
     orphans=[]
     tovisit_=[t]
-    print(len(t.get_leaf_names()))
-    newnodes=0
+    print(f'starting number of leaves: {len(t.get_leaf_names())}')
+    cluster_merges=[]
     while(len(tovisit_)>0):
         node=tovisit_.pop()
         lnames=node.get_leaf_names()
         numleaves=len(lnames)
         if numleaves<cluster_maxsize: 
             groupaccs_=node.get_leaf_names()
-#            print(f'building a new leaf group: {len(groupaccs_)} lnodes')
-            node.add_feature("accs",groupaccs_)
-#            node.add_feature('subtree',node.detach)
-            node.name=f'cool {len(groupaccs_)}, {node.get_distance(node.up)}'
-            newnodes+=len(groupaccs_) 
-            if len(groupaccs_)>orphan_size:
-                clusters.append(node)
+            if len(groupaccs_)>cluster_minsize:
+#                print(f'building a new leaf group: {len(groupaccs_)} lnodes')
+                node.add_feature('cluster_numleaves',len(node.get_leaf_names()))
+                node.add_feature('subtrees',[nc.detach() for nc in node.get_children()])#
+                node.name=f'cool {node.cluster_numleaves} {node.get_distance(node.up)}'
+                cluster_merges.append(len(groupaccs_))
             else:
                 orphans.append(node)
-            nc=node.children[:]
-#            for c in nc:#node.children:
-#                c.detach()
-#            node.name='cool'
         else:
             tovisit_.extend(node.children)
-#    for orph in orphans:
-#        print(orph)
-    #for n in t.traverse():
-    print(newnodes)
-#    print(t)
-    #lengthier part is merging orphan clusters into larger
-    if merge_sister_orphans:
-    #first sort orphans so smallest group is last-
-    orphans.sort(key=lambda x:len(x.accs),reverse=True)#)#attrgetter('accs'))
-    #try to merge sister orphans first
-    while(len(orphans)>0 ):
-        cur_orphan=orphans.pop()
-        groupaccs_=cur_orphan.accs
-#        print(len(cur_orphan.get_sisters()))
-        sisters=[n for n in cur_orphan.get_sisters() if (n.is_leaf() and n in orphans)]
-        sisters.sort(key=lambda x:len(x.accs))
-        if len(sisters)>0:
-            mergenode=sisters[0] 
-            mergenode.accs.extend(cur_orphan.accs)
-            mergenode.name=f'mcool {len(mergenode.accs)}, {node.get_distance(node.up)}'
-            cur_orphan.detach()
-        for orphnum,orph in enumerate(orphans):
-            if len(orph.accs)>orphan_size:
-                clusters.append(orphans.pop(orphnum))
-        orphans.sort(key=lambda x:len(x.accs),reverse=True)#)#attrgetter('accs'))
-#        print(len(sisters))
-    t.ladderize()
-    print(t)
-    return
+    print(f'cluster collapse sizes: {cluster_merges}')
+    #merge sister orphans first
+    sister_merges=[]
+    if collapse_sisters:
+        while(len(orphans)>0):
+            cur_orphan=orphans.pop()
+            pnode=cur_orphan.up
+            sisters=cur_orphan.get_sisters()
+            sis_orphs=[]
+            for orphos in range(len(orphans)-1,-1,-1):
+                if orphans[orphos] in sisters:
+                    sis_orphs.append(orphans.pop(orphos))
+            if len(sis_orphs)>1:
+                size_of_merged=len(cur_orphan.get_leaf_names())+np.sum([len(x.get_leaf_names()) for x in sis_orphs])
+                if size_of_merged>cluster_minsize:
+                    newnode=pnode.add_child(dist=0)
+                    newnode.add_feature('cluster_numleaves',size_of_merged)
+                    newnode.add_feature('subtrees',[cur_orphan.detach()])
+                    for so in sis_orphs:
+                        newnode.subtrees.append(so.detach())
+                    newnode.name=f'mcool {np.sum([len(x) for x in newnode.subtrees])}'
+                    sister_merges.append(size_of_merged)
+    print(f'sisters collapse sizes: {sister_merges}')
+
+    num_leaves=0
+    for lnode in t.get_leaves():
+        if 'subtrees' in lnode.features:
+            num_leaves+=np.sum([len(x.get_leaf_names()) for x in lnode.subtrees])
+            #num_leaves+=lnode.cluster_numleaves#np.sum([len(x.get_leaf_names()) for x in lnode.subtrees])
+        else:
+            num_leaves+=1
+    print(f'sum leaves at end: {num_leaves}')
+    return t
     #add merge with nephew orphan?
-    print(len(t.get_leaf_names()))
 
 
 
