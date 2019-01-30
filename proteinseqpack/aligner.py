@@ -8,8 +8,6 @@ import numpy as np
 import itertools
 
 
-
-
 def get_aligndf(srs:List[SeqRecord],aligner:str='clustal',alnfpath:str=None):
     """Builds dataframe with index & column values set to acc number of each member
 

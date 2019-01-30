@@ -188,7 +188,20 @@ def write_clustertree_tonewick(ct:Tree,otfpath:str='clustertree.nw'):
     ct.write(outfile=otfpath,features=['name'])
     print(f'clusterified newick tree written to {otfpath}')
 
+def read_clustertree_fromnewick(treefpath:str):
+    """reads in clustertree as defined in write_clustertree_fromnewick
 
+    Arguments:
+    treefpath: newick tree with leaf clusternames = including |-delimited accs
+
+    Returns:
+    ete3.Tree with same names and added feature value of accs = list of subtree accs
+    """
+    ctree=Tree(treefpath)
+    for lnode in ctree.get_leaves():
+        accnames=lnode.name
+        lnode.add_feature('accs',[x for x in accnames.strip('|').split('|')])
+    return ctree
 
 if __name__=="__main__":
     local_configfile=open('config.yml','r')
