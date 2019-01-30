@@ -111,7 +111,7 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
     clusters=[]
     orphans=[]
     tovisit_=[t]
-    print(f'starting number of leaves: {len(t.get_leaf_names())}')
+    print(f'--starting number of leaves: {len(t.get_leaf_names())}--')
     cluster_merges=[]
     while(len(tovisit_)>0):
         node=tovisit_.pop()
@@ -160,9 +160,33 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
             #num_leaves+=lnode.cluster_numleaves#np.sum([len(x.get_leaf_names()) for x in lnode.subtrees])
         else:
             num_leaves+=1
-    print(f'sum leaves at end: {num_leaves}')
+    print(f'--total leaves at end: {num_leaves}--')
     return t
     #add merge with nephew orphan?
+
+def write_clustertree_tonewick(ct:Tree,otfpath:str='clustertree.nw'):
+    """redefines node names property according to child leaf accesion codes and writes out as 
+    newick tree
+    
+    Arguments:
+    ctree: ete tree clustered using ete_clustertree_bysize, or ...? (contains 'subtrees' feature)
+    Keyword Arguments:
+    otfpath: path of output tree (default='clustertree.nw')
+
+    Returns:
+    int value number of nodes
+    """
+    ct=ct.copy()
+    for lnode in ct.get_leaves():
+        if 'subtrees' in lnode.features:
+            lnode.name=''
+            for st in lnode.subtrees:
+                for acc in st.get_leaf_names():
+                    lnode.name+=f'{acc}|'
+        else:
+            lnode.name+='|'
+    ct.write(outfile=otfpath,features=['name'])
+    print(f'clusterified newick tree written to {otfpath}')
 
 
 
