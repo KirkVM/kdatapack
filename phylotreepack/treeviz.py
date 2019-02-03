@@ -115,6 +115,9 @@ class EteMplTree:
         self.dashed=True
         self.cluster_property='accs'
         self.cluster_viz='triangle'
+        self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
+        self.cviz_hadict={'left':'left','right':'right','top':'middle','bottom':'middle'}
+        self.cviz_vadict={'left':'middle','right':'middle','top':'top','bottom':'bottom'}
         self.figsize=(15,45)
         self.set_cluster_size()
         self.plot_coords=[[np.inf,np.inf],[-np.inf,-np.inf]]
@@ -140,7 +143,7 @@ class EteMplTree:
         if self.cluster_property=='accs':
             cluster_sizes=[len(l.accs) for l in self.tree.get_leaves()]
             for l in self.tree.get_leaves():
-                l.add_feature('cluster_relsize',len(l.accs)/max(cluster_sizes))
+                l.add_feature('cluster_relsize',np.log(len(l.accs)+1)/np.log(max(cluster_sizes)+1))
     def get_plot_coords(self):
         for node in self.tree.traverse():
             stem_coords=[[np.nan],[np.nan]]
@@ -148,17 +151,23 @@ class EteMplTree:
             if self.orientation in ['left','right']:
                 stem_coords[0]= self.scale*node.stem_coord_span
                 stem_coords[1]= self.scale*node.stem_coord_offset
-            else:
+            elif self.orientation in ['bottom','top']:
                 stem_coords[1]= self.scale*node.stem_coord_span
                 stem_coords[0]= self.scale*node.stem_coord_offset
+            if self.orientation in ['right','top']:
+                stem_coords[0]*=-1
+                stem_coords[1]*=-1
             node.add_feature('stem_plot_coords',stem_coords)
             if node.is_leaf() is False:
                 if self.orientation in ['left','right']:
                     base_coords[0]= self.scale*node.base_coord_offset
                     base_coords[1]= self.scale*node.base_coord_span
-                else:
+                elif self.orientation in ['bottom','top']:
                     base_coords[1]= self.scale*node.base_coord_offset
                     base_coords[0]= self.scale*node.base_coord_span
+                if self.orientation in ['right','top']:
+                    base_coords[0]*=-1
+                    base_coords[1]*=-1
                 node.add_feature('base_plot_coords',base_coords)
 #            print(stem_coords[0])
             self.plot_coords[0]=[min(*stem_coords[0],*base_coords[0],self.plot_coords[0][0]),\
@@ -171,22 +180,31 @@ class EteMplTree:
             if node.is_leaf() is False:
                 plt.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
             if node.is_leaf() and self.cluster_property=='accs':
-                plt.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],marker=align_marker('<', halign='left'),\
+                plt.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
+                marker=align_marker(self.cviz_symboldict[self.orientation],halign=self.cviz_hadict[self.orientation],\
+                valign=self.cviz_vadict[self.orientation]),\
                  clip_on=False, color='k',ms=50*node.cluster_relsize)#, transform=plt.gca().get_xaxis_transform())
-
-
+            if node.is_leaf():
+                if self.orientation=='left':
+                    xs=[node.stem_plot_coords[0][-1],self.plot_coords[1][0]]
+                    ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
+                if self.orientation=='right':
+                    xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][0]]
+                    ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
+                if self.orientation=='bottom':
+                    xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
+                    ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][1]]
+                if self.orientation=='top':
+                    xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
+                    ys=[node.stem_plot_coords[1][-1],self.plot_coords[0][1]]
+                plt.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
+#                dashed_x=[node.stem_plot_coords[0][-1],]
+#                dashed_y=[node.stem_plot_coords[1][-1],]
+#                plt.plot(node.stem_plot_coords[0])
 #        if self.dashed:
 #            for lcoord in self.leaf_coords:
 #                plt.plot('')
           
-
-
-                #if 'stem' in node.features:
-                #    plt.plot(node.stem[0],node.stem[1],lw=3.0,color='black')
-
-#        plt.plot([xcoord,xcoord+tree.dist],[ycoord,ycoord],lw=3.0,color='black')#g-')
-        
- 
 #def mpl_tree_render(tree:Tree,orientation:str='left',dashed:bool=):
 #    plt.figure(figsize=(15,45))
 #    plot_branch(tree,0,0)
