@@ -1,3 +1,5 @@
 dfitlib
 kmslib
+phylotreepack
+proteinseqpack
 tecanpack

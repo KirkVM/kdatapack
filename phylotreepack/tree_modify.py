@@ -85,7 +85,7 @@ def cladecluster_bysimilarity(treefpath,pwiddf_fpath,outgroup,cluster_minpwid,
     t.write(outfile=newtreefpath,features=['name'])
 
 def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=5,\
-                            collapse_sisters:bool=True,outgroup:str=None):
+                            collapse_sisters:bool=True,cleanup_merge=True,outgroup:str=None):
     """reads in a newick tree file, groups sets of leaf nodes and truncates tree at common ancestor.
     merge_sister_orphans options can be useful just for visualization purposes if tree has many polytomies
     
@@ -96,6 +96,7 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
     cluster_maxsize: maximum size for each cluster (default=50)
     cluster_minsize: minimum size for each cluster (default=5)
     collapse_sisters: whether to merge leaves or groups<threshold into a single branch (default True)
+    cleanup_merge: whether to perform final step that clusters all subtrees even if size<cluster_minsize
     outgroup: node (default=None)
     
     Returns: 
@@ -130,7 +131,7 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
         else:
             tovisit_.extend(node.children)
     print(f'cluster collapse sizes: {cluster_merges}')
-    #merge sister orphans first
+    #merge sister orphans
     sister_merges=[]
     if collapse_sisters:
         while(len(orphans)>0):
@@ -152,6 +153,29 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
                     newnode.name=f'mcool {np.sum([len(x) for x in newnode.subtrees])}'
                     sister_merges.append(size_of_merged)
     print(f'sisters collapse sizes: {sister_merges}')
+    if cleanup_merge:
+        visited=set()
+        while len(visited)<len(t.get_leaves()):
+            for n in set(t.get_leaves()).difference(visited):
+                visited.add(n)
+                nosubtrees='subtrees' not in n.features
+                addn=None
+                #if no subtrees, see how far we can climb
+                while nosubtrees:
+                    #if we've climbed once, this is a cluster
+                    if len(n.get_descendants())>0:
+                        addn=n
+                    n=n.up
+                    #continue only if no descendants have subtree
+                    subtree_status=['subtrees' in x.features for x in n.traverse()]
+                    nosubtrees=True not in subtree_status
+                #clusterify the node, then add it and all sub-leaves to the visited set
+                if addn is not None:
+                    addn.add_feature('cluster_numleaves',len(addn.get_leaf_names()))
+                    addn.add_feature('subtrees',[nc.detach() for nc in addn.get_children()])#
+                    addn.name=f'fresh {addn.cluster_numleaves} {addn.get_distance(addn.up)}'
+                    visited=visited.union([x for x in addn.get_leaves()])
+                    break #break to reset leaf candidates with updated visited set as filter
 
     num_leaves=0
     for lnode in t.get_leaves():
