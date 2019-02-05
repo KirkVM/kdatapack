@@ -109,7 +109,6 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
         t.set_outgroup(t&outgroup)
 
     #Breadth-First Tree Traversal, stop when no.leaves<cluster_maxsize
-    clusters=[]
     orphans=[]
     tovisit_=[t]
     print(f'--starting number of leaves: {len(t.get_leaf_names())}--')
@@ -131,6 +130,7 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
         else:
             tovisit_.extend(node.children)
     print(f'cluster collapse sizes: {cluster_merges}')
+
     #merge sister orphans
     sister_merges=[]
     if collapse_sisters:
@@ -153,6 +153,7 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
                     newnode.name=f'mcool {np.sum([len(x) for x in newnode.subtrees])}'
                     sister_merges.append(size_of_merged)
     print(f'sisters collapse sizes: {sister_merges}')
+    #now cleanup_merge
     if cleanup_merge:
         visited=set()
         while len(visited)<len(t.get_leaves()):

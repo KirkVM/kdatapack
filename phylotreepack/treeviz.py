@@ -4,6 +4,7 @@ from typing import Iterable
 from ete3 import Tree
 from matplotlib import markers
 from matplotlib.path import Path
+from operator import attrgetter
 
 def align_marker(marker, halign='center', valign='middle',):
     """
@@ -118,25 +119,18 @@ class EteMplTree:
         self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
         self.cviz_hadict={'left':'left','right':'right','top':'middle','bottom':'middle'}
         self.cviz_vadict={'left':'middle','right':'middle','top':'top','bottom':'bottom'}
-        self.figsize=(15,45)
+#        self.figsize=(15,45)
+        self.ordered_leaves=None
         self.set_cluster_size()
         self.plot_coords=[[np.inf,np.inf],[-np.inf,-np.inf]]
-#        self.leaf_node_edges=[]
-#        self.leaf_node_dots=[]
-#        self.leaf_coords=[]
-#        self.leaf_begin=None
-#        self.leaf_end=None
         self.scale=1.0
     def render(self,figsize:Iterable=None,orientation='left'):
-#        if figsize is not None:
-#            plt.figure(figsize=figsize)
-#        else:
-#            plt.figure(figsize=self.figsize)
-#        else:
-#            plt.figure()
-        plt.figure(figsize=(15,45))
         mpl_plot_branch(self.tree,0,0)
+        self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
+        if figsize is None:
+            figsize=(20,20)
         self.get_plot_coords()
+        plt.figure(figsize=figsize)
         print(self.plot_coords)
         self.plot_it()
     def set_cluster_size(self):
