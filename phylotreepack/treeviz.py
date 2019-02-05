@@ -74,6 +74,12 @@ def align_marker(marker, halign='center', valign='middle',):
 
 
 def depth_sort(trees):
+    """sorts trees according to ranked criteria: 1.#nodes to deepest leaf, 2.dist. to deepest leaf
+
+    Arguments:
+        [ete trees] 
+    Returns:
+        [sorted ete trees], shortest first"""
     dtzips=[]
     for t in trees:
         leaves=t.get_leaves()
@@ -86,8 +92,22 @@ def depth_sort(trees):
     return sorted_trees
 
 def mpl_plot_branch(branch,xcoord,ycoord,sepsize=0.1):
+    """Function called by EteMplTree to determine how to plot tree. 
+    Recursively calls, determining 'stem_coord_offset' for leaves (equivalent to y-value 
+    in a standard left-oriented graph) and 'stem_coord_span' (x-offset and length in a left-oriented graph)
+    for leaves in descent into call stack. On return, intermediate node values are set:
+    'stem_coord_offset' and 'stem_coord_span' as well as 'base_coord_offset' and 'base_coord_span', with
+    latter 2 referring to x-offset and y-offset/length for lines connecting branches in left-oriented graph
+
+    Arguments:
+        branch: the ete3 tree
+        xcoord: current xcoord value (in left-oriented graph) in descent into call stack (float,first call xcoord should=0)
+        ycoord: current ycoord value (in left-orientd graph) in descent into call stack (float,first call ycoord should=0)
+        sepsize: coordinate step size to take between nodes (float, default=0.1)
+    Returns:
+        ete3 tree with feature values ('stem_coord_offset',etc) set to enable plotting a tree
+    """
     if branch.is_leaf():
-        #branch.add_feature('stem_coords',[[xcoord,xcoord+branch.dist],[ycoord,ycoord]])
         branch.add_feature('stem_coord_offset',np.array([ycoord,ycoord]))#[[xcoord,xcoord+branch.dist],[ycoord,ycoord]])
         branch.add_feature('stem_coord_span',np.array([xcoord,xcoord+branch.dist]))
         return ycoord,ycoord-sepsize
@@ -100,21 +120,40 @@ def mpl_plot_branch(branch,xcoord,ycoord,sepsize=0.1):
         ycoord_ascend,ycoord_descend=mpl_plot_branch(sub_branch,xcoord,ycoord)
         ycoord=ycoord_descend
         ycoord_ascends.append(ycoord_ascend)
-    #branch.add_feature('base_coords',[[xcoord for x in range(len(ycoord_ascends))],ycoord_ascends])
     branch.add_feature('base_coord_offset', np.array([xcoord for x in range(len(ycoord_ascends))]))
     branch.add_feature('base_coord_span',np.array(ycoord_ascends))#[[xcoord for x in range(len(ycoord_ascends))],ycoord_ascends])
     ycoord_ascend=np.mean(ycoord_ascends)
-    #branch.add_feature('stem_coords',[[xcoord-branch.dist,xcoord],[ycoord_ascend,ycoord_ascend]])
     branch.add_feature('stem_coord_offset',np.array([ycoord_ascend,ycoord_ascend]))
     branch.add_feature('stem_coord_span',np.array([xcoord-branch.dist,xcoord]))#[[xcoord-branch.dist,xcoord],[ycoord_ascend,ycoord_ascend]])
     return ycoord_ascend,ycoord_descend
 
 class EteMplTree:
+    """Class for plotting an ete3 tree using matplotlib rendering
+
+    Attributes:
+        orientation ('left','right','top','bottom'): tree orientation (str, default 'left')
+        dashed_leaves: whether to add dashes from leaves to edge of graph (default True)
+        cluster_feature: ete node feature to use to define cluster size (str, default 'accs')
+        cluster_viz: symbol to use as cluster indicator (default 'triangle')---not yet impld
+        ordered_leaves: list of leaves from graph start (in ladderized form) to end
+                        (calculated through calling .render() method)
+        plot_coords: [xmin,xmax],[ymin,ymax] values for graph
+                        (calculated through calling .render() method)
+    """
     def __init__(self,tree:Tree):
+        """ constructor for EteMplTree.
+        Calls: self.cluster_size() to add feature .cluster_relsize to each leaf node
+
+        Arguments:
+            tree: an ete3 tree instance
+            [Also currently makes some assumed settings that are configurable public properties-
+            -orientation,cluster_feature,cluster_viz,scale]
+        """
+
         self.tree=tree.copy()
         self.orientation='left'
-        self.dashed=True
-        self.cluster_property='accs'
+        self.dashed_leaves=True
+        self.cluster_feature='accs'
         self.cluster_viz='triangle'
         self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
         self.cviz_hadict={'left':'left','right':'right','top':'middle','bottom':'middle'}
@@ -122,23 +161,42 @@ class EteMplTree:
 #        self.figsize=(15,45)
         self.ordered_leaves=None
         self.set_cluster_size()
-        self.plot_coords=[[np.inf,np.inf],[-np.inf,-np.inf]]
+        self.plot_coords=[[np.inf,-np.inf],[np.inf,-np.inf]]
         self.scale=1.0
-    def render(self,figsize:Iterable=None,orientation='left'):
+    def render(self,figsize:Iterable=(20,20)):
+        """ method to generate figure.
+        Calls: (1)mpl_plot_branch to set node attributes,
+               (2)self.get_plot_coords() to set plot_coords attribute
+               (3)self.plot_it() to make the actual plot
+
+        Arguments:
+            figsize: size-2 tuple with hxw (default= (20,20))
+
+        """
         mpl_plot_branch(self.tree,0,0)
         self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
         if figsize is None:
             figsize=(20,20)
         self.get_plot_coords()
         plt.figure(figsize=figsize)
-        print(self.plot_coords)
         self.plot_it()
     def set_cluster_size(self):
-        if self.cluster_property=='accs':
+        """ 
+        Method to add .cluster_relsize feature to each node in the .tree
+        Currently only supports if .cluster_feature=='accs'
+        """
+ 
+        if self.cluster_feature=='accs':
             cluster_sizes=[len(l.accs) for l in self.tree.get_leaves()]
             for l in self.tree.get_leaves():
                 l.add_feature('cluster_relsize',np.log(len(l.accs)+1)/np.log(max(cluster_sizes)+1))
     def get_plot_coords(self):
+        """ 
+        Method to calculate plot coordinates. 
+        Uses .orientation & .scale feature to add feature 'base_plot_coordinates' (internal nodes only)
+        and 'stem_plot_coordinates' (all nodes) to all ete3 tree nodes for plotting. 
+        Also generates overall .plot_coordinates
+        """
         for node in self.tree.traverse():
             stem_coords=[[np.nan],[np.nan]]
             base_coords=[[np.nan],[np.nan]]
@@ -163,24 +221,27 @@ class EteMplTree:
                     base_coords[0]*=-1
                     base_coords[1]*=-1
                 node.add_feature('base_plot_coords',base_coords)
-#            print(stem_coords[0])
             self.plot_coords[0]=[min(*stem_coords[0],*base_coords[0],self.plot_coords[0][0]),\
-                                 min(*stem_coords[1],*base_coords[1],self.plot_coords[0][1])]
-            self.plot_coords[1]=[max(*stem_coords[0],*base_coords[0],self.plot_coords[1][0]),\
-                                max(*stem_coords[1],*base_coords[1],self.plot_coords[1][1])]
+                                max(*stem_coords[0],*base_coords[0],self.plot_coords[0][1])]
+            self.plot_coords[1]=[min(*stem_coords[1],*base_coords[1],self.plot_coords[1][0]),\
+                                  max(*stem_coords[1],*base_coords[1],self.plot_coords[1][1])]
     def plot_it(self):
+        """ method to generate figure. 
+        Currently called from within render() method as that first calls necessary get_plot_coordinates() method
+        """
+ 
         for node in self.tree.traverse():
             plt.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=3.0,color='black')
             if node.is_leaf() is False:
                 plt.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
-            if node.is_leaf() and self.cluster_property=='accs':
+            if node.is_leaf() and self.cluster_feature=='accs':
                 plt.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
                 marker=align_marker(self.cviz_symboldict[self.orientation],halign=self.cviz_hadict[self.orientation],\
                 valign=self.cviz_vadict[self.orientation]),\
                  clip_on=False, color='k',ms=50*node.cluster_relsize)#, transform=plt.gca().get_xaxis_transform())
-            if node.is_leaf():
+            if node.is_leaf() and self.dashed_leaves:
                 if self.orientation=='left':
-                    xs=[node.stem_plot_coords[0][-1],self.plot_coords[1][0]]
+                    xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][1]]
                     ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
                 if self.orientation=='right':
                     xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][0]]
@@ -190,15 +251,9 @@ class EteMplTree:
                     ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][1]]
                 if self.orientation=='top':
                     xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
-                    ys=[node.stem_plot_coords[1][-1],self.plot_coords[0][1]]
+                    ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][0]]
                 plt.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
-#                dashed_x=[node.stem_plot_coords[0][-1],]
-#                dashed_y=[node.stem_plot_coords[1][-1],]
-#                plt.plot(node.stem_plot_coords[0])
-#        if self.dashed:
-#            for lcoord in self.leaf_coords:
-#                plt.plot('')
-          
+         
 #def mpl_tree_render(tree:Tree,orientation:str='left',dashed:bool=):
 #    plt.figure(figsize=(15,45))
 #    plot_branch(tree,0,0)
