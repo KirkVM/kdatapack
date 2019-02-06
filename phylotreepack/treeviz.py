@@ -91,7 +91,7 @@ def depth_sort(trees):
     sorted_trees=[x[2] for x in dtzips]#.sort(key=lambda x:x[0])]
     return sorted_trees
 
-def mpl_plot_branch(branch,xcoord,ycoord,sepsize=0.1):
+def mpl_plot_branch(branch,xcoord,ycoord,sepsize):
     """Function called by EteMplTree to determine how to plot tree. 
     Recursively calls, determining 'stem_coord_offset' for leaves (equivalent to y-value 
     in a standard left-oriented graph) and 'stem_coord_span' (x-offset and length in a left-oriented graph)
@@ -117,7 +117,7 @@ def mpl_plot_branch(branch,xcoord,ycoord,sepsize=0.1):
         sorted_sub_branches=depth_sort(sub_branches)
     ycoord_ascends=[]
     for sub_branch in sorted_sub_branches:
-        ycoord_ascend,ycoord_descend=mpl_plot_branch(sub_branch,xcoord,ycoord)
+        ycoord_ascend,ycoord_descend=mpl_plot_branch(sub_branch,xcoord,ycoord,sepsize)
         ycoord=ycoord_descend
         ycoord_ascends.append(ycoord_ascend)
     branch.add_feature('base_coord_offset', np.array([xcoord for x in range(len(ycoord_ascends))]))
@@ -162,6 +162,7 @@ class EteMplTree:
         self.ordered_leaves=None
         self.set_cluster_size()
         self.plot_coords=[[np.inf,-np.inf],[np.inf,-np.inf]]
+        self.leaf_sepsize=0.1
         self.scale=1.0
     def render(self,orientation=None,scale=None,figsize:Iterable=(20,20),ax=None):
         """ method to generate figure.
@@ -175,7 +176,7 @@ class EteMplTree:
             figsize: size-2 tuple with hxw (default= (20,20))
 
         """
-        mpl_plot_branch(self.tree,0,0)
+        mpl_plot_branch(self.tree,0,0,self.leaf_sepsize)
         self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
         if figsize is None:
             figsize=(20,20)
@@ -183,10 +184,12 @@ class EteMplTree:
         if scale is None: scale=self.scale
         self.get_plot_coords(orientation,scale)
         if ax is None:
-            plt.figure(figsize=figsize)
-            self.plot_it(plt.gca(),orientation)
-        else:
-            self.plot_it(ax,orientation)
+            ax=plt.gca()
+           #plt.figure(figsize=figsize)
+           # self.plot_it(plt.gca(),orientation)
+        #else:
+        self.plot_it(ax,orientation)
+        self.trim_plotspace(ax,orientation,scale,self.leaf_sepsize)
     def set_cluster_size(self):
         """ 
         Method to add .cluster_relsize feature to each node in the .tree
@@ -207,6 +210,7 @@ class EteMplTree:
             orientation: 'left','right','bottom' or 'top' (default is set in constructor (probably 'left'))
             scale: float (default is set in constructor (probably 1.0))
         """
+        self.plot_coords=[[np.inf,-np.inf],[np.inf,-np.inf]]
         for node in self.tree.traverse():
             stem_coords=[[np.nan],[np.nan]]
             base_coords=[[np.nan],[np.nan]]
@@ -235,6 +239,7 @@ class EteMplTree:
                                 max(*stem_coords[0],*base_coords[0],self.plot_coords[0][1])]
             self.plot_coords[1]=[min(*stem_coords[1],*base_coords[1],self.plot_coords[1][0]),\
                                   max(*stem_coords[1],*base_coords[1],self.plot_coords[1][1])]
+        print(self.plot_coords)
     def plot_it(self,ax,orientation):
         """ method to generate figure. 
         Currently called from within render() method as that first calls necessary get_plot_coordinates() method
@@ -263,7 +268,28 @@ class EteMplTree:
                     xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
                     ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][0]]
                 ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
-        ax.axis('off')
+#        ax.axis('off')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    def trim_plotspace(self,ax,orientation,scale,leaf_sepsize):
+        if orientation in ['left','right']:
+            ax.set_xlim(self.plot_coords[0][0]- \
+                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
+                    self.plot_coords[0][1]+ \
+                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]))
+            ax.set_ylim(self.plot_coords[1][0]-0.5*scale*leaf_sepsize,self.plot_coords[1][1]+0.5*scale*0.1)
+        elif orientation in ['top','bottom']:
+            ax.set_ylim(self.plot_coords[1][0]- \
+                    0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]),\
+                    self.plot_coords[1][1]+ \
+                    0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]))
+            ax.set_xlim(self.plot_coords[0][0]-0.5*scale*leaf_sepsize,self.plot_coords[0][1]+0.5*scale*0.1)
+                
+            
+
+#plt.gca().set_xlim(0.0,3.3)
+#plt.gca().spines['left'].set_visible(False)
          
 #def mpl_tree_render(tree:Tree,orientation:str='left',dashed:bool=):
 #    plt.figure(figsize=(15,45))
