@@ -163,13 +163,15 @@ class EteMplTree:
         self.set_cluster_size()
         self.plot_coords=[[np.inf,-np.inf],[np.inf,-np.inf]]
         self.scale=1.0
-    def render(self,figsize:Iterable=(20,20)):
+    def render(self,orientation=None,scale=None,figsize:Iterable=(20,20),ax=None):
         """ method to generate figure.
         Calls: (1)mpl_plot_branch to set node attributes,
                (2)self.get_plot_coords() to set plot_coords attribute
                (3)self.plot_it() to make the actual plot
 
-        Arguments:
+        Keyword arguments:
+            orientation: 'left','right','bottom', or 'top' (default is to use object property .orientation)
+            scale: float setting figure scaling (default is to use object property .scale)
             figsize: size-2 tuple with hxw (default= (20,20))
 
         """
@@ -177,9 +179,14 @@ class EteMplTree:
         self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
         if figsize is None:
             figsize=(20,20)
-        self.get_plot_coords()
-        plt.figure(figsize=figsize)
-        self.plot_it()
+        if orientation is None: orientation=self.orientation
+        if scale is None: scale=self.scale
+        self.get_plot_coords(orientation,scale)
+        if ax is None:
+            plt.figure(figsize=figsize)
+            self.plot_it(plt.gca(),orientation)
+        else:
+            self.plot_it(ax,orientation)
     def set_cluster_size(self):
         """ 
         Method to add .cluster_relsize feature to each node in the .tree
@@ -190,34 +197,37 @@ class EteMplTree:
             cluster_sizes=[len(l.accs) for l in self.tree.get_leaves()]
             for l in self.tree.get_leaves():
                 l.add_feature('cluster_relsize',np.log(len(l.accs)+1)/np.log(max(cluster_sizes)+1))
-    def get_plot_coords(self):
+    def get_plot_coords(self,orientation,scale):
         """ 
-        Method to calculate plot coordinates. 
-        Uses .orientation & .scale feature to add feature 'base_plot_coordinates' (internal nodes only)
-        and 'stem_plot_coordinates' (all nodes) to all ete3 tree nodes for plotting. 
+        Method to calculate plot coordinates. Calculates then adds feature 'base_plot_coordinates' 
+        (internal nodes only) and 'stem_plot_coordinates' (all nodes) to all ete3 tree nodes for plotting. 
         Also generates overall .plot_coordinates
+
+        Arguments:
+            orientation: 'left','right','bottom' or 'top' (default is set in constructor (probably 'left'))
+            scale: float (default is set in constructor (probably 1.0))
         """
         for node in self.tree.traverse():
             stem_coords=[[np.nan],[np.nan]]
             base_coords=[[np.nan],[np.nan]]
-            if self.orientation in ['left','right']:
-                stem_coords[0]= self.scale*node.stem_coord_span
-                stem_coords[1]= self.scale*node.stem_coord_offset
-            elif self.orientation in ['bottom','top']:
-                stem_coords[1]= self.scale*node.stem_coord_span
-                stem_coords[0]= self.scale*node.stem_coord_offset
-            if self.orientation in ['right','top']:
+            if orientation in ['left','right']:
+                stem_coords[0]= scale*node.stem_coord_span
+                stem_coords[1]= scale*node.stem_coord_offset
+            elif orientation in ['bottom','top']:
+                stem_coords[1]= scale*node.stem_coord_span
+                stem_coords[0]= scale*node.stem_coord_offset
+            if orientation in ['right','top']:
                 stem_coords[0]*=-1
                 stem_coords[1]*=-1
             node.add_feature('stem_plot_coords',stem_coords)
             if node.is_leaf() is False:
-                if self.orientation in ['left','right']:
-                    base_coords[0]= self.scale*node.base_coord_offset
-                    base_coords[1]= self.scale*node.base_coord_span
-                elif self.orientation in ['bottom','top']:
-                    base_coords[1]= self.scale*node.base_coord_offset
-                    base_coords[0]= self.scale*node.base_coord_span
-                if self.orientation in ['right','top']:
+                if orientation in ['left','right']:
+                    base_coords[0]= scale*node.base_coord_offset
+                    base_coords[1]= scale*node.base_coord_span
+                elif orientation in ['bottom','top']:
+                    base_coords[1]= scale*node.base_coord_offset
+                    base_coords[0]= scale*node.base_coord_span
+                if orientation in ['right','top']:
                     base_coords[0]*=-1
                     base_coords[1]*=-1
                 node.add_feature('base_plot_coords',base_coords)
@@ -225,34 +235,35 @@ class EteMplTree:
                                 max(*stem_coords[0],*base_coords[0],self.plot_coords[0][1])]
             self.plot_coords[1]=[min(*stem_coords[1],*base_coords[1],self.plot_coords[1][0]),\
                                   max(*stem_coords[1],*base_coords[1],self.plot_coords[1][1])]
-    def plot_it(self):
+    def plot_it(self,ax,orientation):
         """ method to generate figure. 
         Currently called from within render() method as that first calls necessary get_plot_coordinates() method
         """
  
         for node in self.tree.traverse():
-            plt.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=3.0,color='black')
+            ax.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=3.0,color='black')
             if node.is_leaf() is False:
-                plt.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
+                ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
             if node.is_leaf() and self.cluster_feature=='accs':
-                plt.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
-                marker=align_marker(self.cviz_symboldict[self.orientation],halign=self.cviz_hadict[self.orientation],\
-                valign=self.cviz_vadict[self.orientation]),\
+                ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
+                marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
+                valign=self.cviz_vadict[orientation]),\
                  clip_on=False, color='k',ms=50*node.cluster_relsize)#, transform=plt.gca().get_xaxis_transform())
             if node.is_leaf() and self.dashed_leaves:
-                if self.orientation=='left':
+                if orientation=='left':
                     xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][1]]
                     ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
-                if self.orientation=='right':
+                if orientation=='right':
                     xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][0]]
                     ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
-                if self.orientation=='bottom':
+                if orientation=='bottom':
                     xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
                     ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][1]]
-                if self.orientation=='top':
+                if orientation=='top':
                     xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
                     ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][0]]
-                plt.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
+                ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
+        ax.axis('off')
          
 #def mpl_tree_render(tree:Tree,orientation:str='left',dashed:bool=):
 #    plt.figure(figsize=(15,45))
