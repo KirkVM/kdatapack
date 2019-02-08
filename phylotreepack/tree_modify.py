@@ -84,13 +84,13 @@ def cladecluster_bysimilarity(treefpath,pwiddf_fpath,outgroup,cluster_minpwid,
     print(newtreefpath)
     t.write(outfile=newtreefpath,features=['name'])
 
-def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=5,\
+def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
                             collapse_sisters:bool=True,cleanup_merge=True,outgroup:str=None):
-    """reads in a newick tree file, groups sets of leaf nodes and truncates tree at common ancestor.
+    """takes ete3 tree, then groups sets of leaf nodes and truncates tree at common ancestor.
     merge_sister_orphans options can be useful just for visualization purposes if tree has many polytomies
     
     Arguments:
-    treefpath: str representing path to newick tree file
+    t: ete3 tree object
     
     Keyword Arguments:
     cluster_maxsize: maximum size for each cluster (default=50)
@@ -103,8 +103,8 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
     ete tree file with added feature 'subtrees' and 'cluster_numleaves' for collapsed nodes, 
     which correspond to a list of child nodes and number of leaves in the cluster
     """
-    print(f'reading newick file {treefpath}')
-    t=Tree(treefpath)
+#    print(f'reading newick file {treefpath}')
+#    t=Tree(treefpath)
     if outgroup is not None:
         t.set_outgroup(t&outgroup)
 
@@ -178,6 +178,15 @@ def ete_cluster_bysize(treefpath:str,cluster_maxsize:int=50,cluster_minsize:int=
                     visited=visited.union([x for x in addn.get_leaves()])
                     break #break to reset leaf candidates with updated visited set as filter
 
+    #now at end add accs feature (a list of acc under each)
+    for lnode in t.get_leaves():
+        lnode.add_feature('accs',[])
+        if 'subtrees' in lnode.features:
+            lnode.accs=[x.get_leaf_names() for x in lnode.subtrees]
+        else:
+            lnode.accs.append(lnode.name)
+
+    #final consistency check and readout
     num_leaves=0
     for lnode in t.get_leaves():
         if 'subtrees' in lnode.features:

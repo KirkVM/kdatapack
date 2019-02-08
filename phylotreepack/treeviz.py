@@ -273,6 +273,7 @@ class EteMplTree:
         ax.set_yticks([])
 
     def trim_plotspace(self,ax,orientation,scale,leaf_sepsize):
+        #this can be improved! should adjust scale using cluster glyph locations...
         if orientation in ['left','right']:
             ax.set_xlim(self.plot_coords[0][0]- \
                     0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
