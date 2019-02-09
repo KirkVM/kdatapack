@@ -253,30 +253,28 @@ class EteMplTree:
                 ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
         self.plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
         self.decorated_plot_coords=self.plot_coords[:]
-        print(self.plot_coords)
-#        Axes.convert_xunits(0.1)
+        #print(self.plot_coords)
+        inverter = ax.transData.inverted()
         if self.cluster_feature=='accs':
             dummy=ax.transData.transform((leafspacing,leafspacing))#leafspacing
             if orientation in ['left','right']:
                 fig_leafspacing=dummy[1]
             elif orientation in ['bottom','top']:
                 fig_leafspacing=dummy[0]#-dummy[1]
-#                dummy=ax.transData.transform((leafspacing,0))#leafspacing
             for node in self.tree.get_leaves():
-                cool=ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
+                cmarker=ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
                     marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
                     valign=self.cviz_vadict[orientation]),\
                      clip_on=False, color='k',ms=np.sqrt(fig_leafspacing)*node.cluster_relsize)
-                c=cool[0].get_tightbbox(ax)
-                inv = ax.transData.inverted()
-                silly=inv.transform(c.corners())
-                symbol_xvals=[x[0] for x in silly]
-                symbol_yvals=[x[1] for x in silly]
-                self.decorated_plot_coords[0]=[min(self.decorated_plot_coords[0][0],*symbol_xvals),
-                                               max(self.decorated_plot_coords[0][1],*symbol_xvals)]
-                self.decorated_plot_coords[1]=[min(self.decorated_plot_coords[1][0],*symbol_yvals),
-                                               max(self.decorated_plot_coords[1][1],*symbol_yvals)]
-        print(self.decorated_plot_coords)
+                cmrkrl2d=cmarker[0].get_tightbbox(ax)
+                cmrkr_bounds=inverter.transform(cmrkrl2d.corners())
+                cmrkr_xbounds=[x[0] for x in cmrkr_bounds]
+                cmrkr_ybounds=[x[1] for x in cmrkr_bounds]
+                self.decorated_plot_coords[0]=[min(self.decorated_plot_coords[0][0],*cmrkr_xbounds),
+                                               max(self.decorated_plot_coords[0][1],*cmrkr_xbounds)]
+                self.decorated_plot_coords[1]=[min(self.decorated_plot_coords[1][0],*cmrkr_ybounds),
+                                               max(self.decorated_plot_coords[1][1],*cmrkr_ybounds)]
+        #print(self.decorated_plot_coords)
         if self.dashed_leaves:
             for lnode in self.tree.get_leaves():
                 if orientation=='left':
@@ -293,7 +291,7 @@ class EteMplTree:
                     ys=[lnode.stem_plot_coords[1][-1],self.decorated_plot_coords[1][0]]
                 ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
             plt.plot()
-        #ax.set_xticks([])
+        ax.set_xticks([])
         ax.set_yticks([])
 
     def trim_plotspace(self,ax,orientation,leafspacing):
@@ -302,32 +300,14 @@ class EteMplTree:
         cur_maxes=ax.transData.transform([x[1] for x in self.decorated_plot_coords])
         print('.',cur_mins,cur_maxes)
         inv=ax.transData.inverted()
-#        cur_mins[0]-=2
-#        cur_maxes[0]+=2
-#        cur_mins=inv.transform([x for x in cur_mins])
-#        cur_maxes=inv.transform([x for x in cur_maxes])
-#        print(self.decorated_plot_coords)
-#        print(cur_mins)
         if orientation in ['left','right']:
-#            ax.set_xlim(self.plot_coords[0][0]- \
-#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
-#                    self.plot_coords[0][1]+ \
-#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]))
-            #ax.set_xlim(self.decorated_plot_coords[0],ax.IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
             cur_mins[0]-=2
             cur_maxes[0]+=2
             cur_mins=inv.transform([x for x in cur_mins])
             cur_maxes=inv.transform([x for x in cur_maxes])
             ax.set_xlim(cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
-#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
-#                    self.plot_coords[0][1]+ \
-#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]))
             ax.set_ylim(self.plot_coords[1][0]-0.5*leafspacing,self.plot_coords[1][1]+0.5*leafspacing)
         elif orientation in ['top','bottom']:
-            #ax.set_ylim(self.plot_coords[1][0]- \
-            #        0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]),\
-            #        self.plot_coords[1][1]+ \
-            #        0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]))
             cur_mins[1]-=2
             cur_maxes[1]+=2
             cur_mins=inv.transform([x for x in cur_mins])
@@ -339,11 +319,3 @@ class EteMplTree:
 
 #plt.gca().set_xlim(0.0,3.3)
 #plt.gca().spines['left'].set_visible(False)
-         
-#def mpl_tree_render(tree:Tree,orientation:str='left',dashed:bool=):
-#    plt.figure(figsize=(15,45))
-#    plot_branch(tree,0,0)
-#plt.axis((-0.3,40,-9,0.3))
-#plt.xticks(ticks=[0,1,2])
-#plt.axes.tick_params(axis='x',)
-#plot_branch(mytree,0,0)

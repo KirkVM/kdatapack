@@ -182,7 +182,8 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
     for lnode in t.get_leaves():
         lnode.add_feature('accs',[])
         if 'subtrees' in lnode.features:
-            lnode.accs=[x.get_leaf_names() for x in lnode.subtrees]
+            for st in lnode.subtrees:
+                lnode.accs.extend(st.get_leaf_names())#lnode.accs=[*y for y in [x.get_leaf_names() for x in lnode.subtrees]]
         else:
             lnode.accs.append(lnode.name)
 
