@@ -126,7 +126,8 @@ def mpl_plot_branch(branch,xcoord,ycoord,sepsize):
     branch.add_feature('stem_coord_offset',np.array([ycoord_ascend,ycoord_ascend]))
     branch.add_feature('stem_coord_span',np.array([xcoord-branch.dist,xcoord]))#[[xcoord-branch.dist,xcoord],[ycoord_ascend,ycoord_ascend]])
     return ycoord_ascend,ycoord_descend
-
+from matplotlib.axes import Axes
+from matplotlib.transforms import IdentityTransform
 class EteMplTree:
     """Class for plotting an ete3 tree using matplotlib rendering
 
@@ -152,19 +153,24 @@ class EteMplTree:
 
         self.tree=tree.copy()
         self.orientation='left'
+        self.scale=1.0
         self.dashed_leaves=True
-        self.cluster_feature='accs'
         self.cluster_viz='triangle'
         self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
         self.cviz_hadict={'left':'left','right':'right','top':'middle','bottom':'middle'}
         self.cviz_vadict={'left':'middle','right':'middle','top':'top','bottom':'bottom'}
+        self.initial_leafspacing=0.1
 #        self.figsize=(15,45)
-        self.ordered_leaves=None
+        
+        self.cluster_feature='accs'
         self.set_cluster_size()
+
         self.plot_coords=[[np.inf,-np.inf],[np.inf,-np.inf]]
-        self.leaf_sepsize=0.1
-        self.scale=1.0
-    def render(self,orientation=None,scale=None,figsize:Iterable=(20,20),ax=None):
+        self.ordered_leaves=None
+        self.decorated_plot_coords=None
+
+#        self.
+    def render(self,orientation=None,scale=None,figsize:Iterable=(20,20),initial_leafspacing:float=None,ax=None):
         """ method to generate figure.
         Calls: (1)mpl_plot_branch to set node attributes,
                (2)self.get_plot_coords() to set plot_coords attribute
@@ -176,20 +182,22 @@ class EteMplTree:
             figsize: size-2 tuple with hxw (default= (20,20))
 
         """
-        mpl_plot_branch(self.tree,0,0,self.leaf_sepsize)
-        self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
-        if figsize is None:
-            figsize=(20,20)
+        if initial_leafspacing is None:initial_leafspacing=self.initial_leafspacing
         if orientation is None: orientation=self.orientation
         if scale is None: scale=self.scale
-        self.get_plot_coords(orientation,scale)
+        leafspacing=initial_leafspacing*scale
+
+        mpl_plot_branch(self.tree,0,0,initial_leafspacing) #builds tree into ete3 tree
+        self.set_plot_coords(orientation,scale) #adjusts these using scale/orientation
+        self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
+
         if ax is None:
+            plt.figure(figsize=figsize)
             ax=plt.gca()
-           #plt.figure(figsize=figsize)
-           # self.plot_it(plt.gca(),orientation)
-        #else:
-        self.plot_it(ax,orientation)
-        self.trim_plotspace(ax,orientation,scale,self.leaf_sepsize)
+
+        self.plot_it(ax,orientation,leafspacing) #self.decorated_plot_coords gets set in here
+        #return silly
+        self.trim_plotspace(ax,orientation,leafspacing) #and used here
     def set_cluster_size(self):
         """ 
         Method to add .cluster_relsize feature to each node in the .tree
@@ -200,7 +208,7 @@ class EteMplTree:
             cluster_sizes=[len(l.accs) for l in self.tree.get_leaves()]
             for l in self.tree.get_leaves():
                 l.add_feature('cluster_relsize',np.log(len(l.accs)+1)/np.log(max(cluster_sizes)+1))
-    def get_plot_coords(self,orientation,scale):
+    def set_plot_coords(self,orientation,scale):
         """ 
         Method to calculate plot coordinates. Calculates then adds feature 'base_plot_coordinates' 
         (internal nodes only) and 'stem_plot_coordinates' (all nodes) to all ete3 tree nodes for plotting. 
@@ -235,57 +243,97 @@ class EteMplTree:
                     base_coords[0]*=-1
                     base_coords[1]*=-1
                 node.add_feature('base_plot_coords',base_coords)
-            self.plot_coords[0]=[min(*stem_coords[0],*base_coords[0],self.plot_coords[0][0]),\
-                                max(*stem_coords[0],*base_coords[0],self.plot_coords[0][1])]
-            self.plot_coords[1]=[min(*stem_coords[1],*base_coords[1],self.plot_coords[1][0]),\
-                                  max(*stem_coords[1],*base_coords[1],self.plot_coords[1][1])]
-        print(self.plot_coords)
-    def plot_it(self,ax,orientation):
+    def plot_it(self,ax,orientation,leafspacing):
         """ method to generate figure. 
         Currently called from within render() method as that first calls necessary get_plot_coordinates() method
         """
- 
         for node in self.tree.traverse():
             ax.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=3.0,color='black')
             if node.is_leaf() is False:
                 ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
-            if node.is_leaf() and self.cluster_feature=='accs':
-                ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
-                marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
-                valign=self.cviz_vadict[orientation]),\
-                 clip_on=False, color='k',ms=50*node.cluster_relsize)#, transform=plt.gca().get_xaxis_transform())
-            if node.is_leaf() and self.dashed_leaves:
+        self.plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
+        self.decorated_plot_coords=self.plot_coords[:]
+        print(self.plot_coords)
+#        Axes.convert_xunits(0.1)
+        if self.cluster_feature=='accs':
+            dummy=ax.transData.transform((leafspacing,leafspacing))#leafspacing
+            if orientation in ['left','right']:
+                fig_leafspacing=dummy[1]
+            elif orientation in ['bottom','top']:
+                fig_leafspacing=dummy[0]#-dummy[1]
+#                dummy=ax.transData.transform((leafspacing,0))#leafspacing
+            for node in self.tree.get_leaves():
+                cool=ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
+                    marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
+                    valign=self.cviz_vadict[orientation]),\
+                     clip_on=False, color='k',ms=np.sqrt(fig_leafspacing)*node.cluster_relsize)
+                c=cool[0].get_tightbbox(ax)
+                inv = ax.transData.inverted()
+                silly=inv.transform(c.corners())
+                symbol_xvals=[x[0] for x in silly]
+                symbol_yvals=[x[1] for x in silly]
+                self.decorated_plot_coords[0]=[min(self.decorated_plot_coords[0][0],*symbol_xvals),
+                                               max(self.decorated_plot_coords[0][1],*symbol_xvals)]
+                self.decorated_plot_coords[1]=[min(self.decorated_plot_coords[1][0],*symbol_yvals),
+                                               max(self.decorated_plot_coords[1][1],*symbol_yvals)]
+        print(self.decorated_plot_coords)
+        if self.dashed_leaves:
+            for lnode in self.tree.get_leaves():
                 if orientation=='left':
-                    xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][1]]
-                    ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
+                    xs=[lnode.stem_plot_coords[0][-1],self.decorated_plot_coords[0][1]]
+                    ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
                 if orientation=='right':
-                    xs=[node.stem_plot_coords[0][-1],self.plot_coords[0][0]]
-                    ys=[node.stem_plot_coords[1][-1],node.stem_plot_coords[1][-1]]
+                    xs=[lnode.stem_plot_coords[0][-1],self.decorated_plot_coords[0][0]]
+                    ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
                 if orientation=='bottom':
-                    xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
-                    ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][1]]
+                    xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
+                    ys=[lnode.stem_plot_coords[1][-1],self.decorated_plot_coords[1][1]]
                 if orientation=='top':
-                    xs=[node.stem_plot_coords[0][-1],node.stem_plot_coords[0][-1]]
-                    ys=[node.stem_plot_coords[1][-1],self.plot_coords[1][0]]
+                    xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
+                    ys=[lnode.stem_plot_coords[1][-1],self.decorated_plot_coords[1][0]]
                 ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
-#        ax.axis('off')
-        ax.set_xticks([])
+            plt.plot()
+        #ax.set_xticks([])
         ax.set_yticks([])
 
-    def trim_plotspace(self,ax,orientation,scale,leaf_sepsize):
+    def trim_plotspace(self,ax,orientation,leafspacing):
         #this can be improved! should adjust scale using cluster glyph locations...
+        cur_mins=ax.transData.transform([x[0] for x in self.decorated_plot_coords])
+        cur_maxes=ax.transData.transform([x[1] for x in self.decorated_plot_coords])
+        print('.',cur_mins,cur_maxes)
+        inv=ax.transData.inverted()
+#        cur_mins[0]-=2
+#        cur_maxes[0]+=2
+#        cur_mins=inv.transform([x for x in cur_mins])
+#        cur_maxes=inv.transform([x for x in cur_maxes])
+#        print(self.decorated_plot_coords)
+#        print(cur_mins)
         if orientation in ['left','right']:
-            ax.set_xlim(self.plot_coords[0][0]- \
-                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
-                    self.plot_coords[0][1]+ \
-                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]))
-            ax.set_ylim(self.plot_coords[1][0]-0.5*scale*leaf_sepsize,self.plot_coords[1][1]+0.5*scale*0.1)
+#            ax.set_xlim(self.plot_coords[0][0]- \
+#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
+#                    self.plot_coords[0][1]+ \
+#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]))
+            #ax.set_xlim(self.decorated_plot_coords[0],ax.IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
+            cur_mins[0]-=2
+            cur_maxes[0]+=2
+            cur_mins=inv.transform([x for x in cur_mins])
+            cur_maxes=inv.transform([x for x in cur_maxes])
+            ax.set_xlim(cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
+#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]),\
+#                    self.plot_coords[0][1]+ \
+#                    0.01*(self.plot_coords[0][1]-self.plot_coords[0][0]))
+            ax.set_ylim(self.plot_coords[1][0]-0.5*leafspacing,self.plot_coords[1][1]+0.5*leafspacing)
         elif orientation in ['top','bottom']:
-            ax.set_ylim(self.plot_coords[1][0]- \
-                    0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]),\
-                    self.plot_coords[1][1]+ \
-                    0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]))
-            ax.set_xlim(self.plot_coords[0][0]-0.5*scale*leaf_sepsize,self.plot_coords[0][1]+0.5*scale*0.1)
+            #ax.set_ylim(self.plot_coords[1][0]- \
+            #        0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]),\
+            #        self.plot_coords[1][1]+ \
+            #        0.01*(self.plot_coords[1][1]-self.plot_coords[1][0]))
+            cur_mins[1]-=2
+            cur_maxes[1]+=2
+            cur_mins=inv.transform([x for x in cur_mins])
+            cur_maxes=inv.transform([x for x in cur_maxes])
+            ax.set_ylim(cur_mins[1],cur_maxes[1])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
+            ax.set_xlim(self.plot_coords[0][0]-0.5*leafspacing,self.plot_coords[0][1]+0.5*leafspacing)
                 
             
 
