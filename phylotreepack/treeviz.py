@@ -1,3 +1,4 @@
+import itertools,functools
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Iterable
@@ -5,6 +6,8 @@ from ete3 import Tree
 from matplotlib import markers
 from matplotlib.path import Path
 from operator import attrgetter
+#from functools import reduce
+#from itertools import product
 
 def align_marker(marker, halign='center', valign='middle',):
     """
@@ -91,7 +94,7 @@ def depth_sort(trees):
     sorted_trees=[x[2] for x in dtzips]#.sort(key=lambda x:x[0])]
     return sorted_trees
 
-def mpl_plot_branch(branch,xcoord,ycoord,sepsize):
+def ete_set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     """Function called by EteMplTree to determine how to plot tree. 
     Recursively calls, determining 'stem_coord_offset' for leaves (equivalent to y-value 
     in a standard left-oriented graph) and 'stem_coord_span' (x-offset and length in a left-oriented graph)
@@ -117,7 +120,7 @@ def mpl_plot_branch(branch,xcoord,ycoord,sepsize):
         sorted_sub_branches=depth_sort(sub_branches)
     ycoord_ascends=[]
     for sub_branch in sorted_sub_branches:
-        ycoord_ascend,ycoord_descend=mpl_plot_branch(sub_branch,xcoord,ycoord,sepsize)
+        ycoord_ascend,ycoord_descend=ete_set_branch_coordinates(sub_branch,xcoord,ycoord,sepsize)
         ycoord=ycoord_descend
         ycoord_ascends.append(ycoord_ascend)
     branch.add_feature('base_coord_offset', np.array([xcoord for x in range(len(ycoord_ascends))]))
@@ -126,8 +129,8 @@ def mpl_plot_branch(branch,xcoord,ycoord,sepsize):
     branch.add_feature('stem_coord_offset',np.array([ycoord_ascend,ycoord_ascend]))
     branch.add_feature('stem_coord_span',np.array([xcoord-branch.dist,xcoord]))#[[xcoord-branch.dist,xcoord],[ycoord_ascend,ycoord_ascend]])
     return ycoord_ascend,ycoord_descend
-from matplotlib.axes import Axes
-from matplotlib.transforms import IdentityTransform
+#from matplotlib.axes import Axes
+#from matplotlib.transforms import IdentityTransform
 class EteMplTree:
     """Class for plotting an ete3 tree using matplotlib rendering
 
@@ -159,8 +162,11 @@ class EteMplTree:
         self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
         self.cviz_hadict={'left':'left','right':'right','top':'middle','bottom':'middle'}
         self.cviz_vadict={'left':'middle','right':'middle','top':'top','bottom':'bottom'}
+        self.tree_lw=3.0
+        self.tree_color='black'
         self.initial_leafspacing=0.1
-#        self.figsize=(15,45)
+        self.create_leaf_names=False
+        self.draw_leaf_names=False
         
         self.cluster_feature='accs'
         self.set_cluster_size()
@@ -169,35 +175,6 @@ class EteMplTree:
         self.ordered_leaves=None
         self.decorated_plot_coords=None
 
-#        self.
-    def render(self,orientation=None,scale=None,figsize:Iterable=(20,20),initial_leafspacing:float=None,ax=None):
-        """ method to generate figure.
-        Calls: (1)mpl_plot_branch to set node attributes,
-               (2)self.get_plot_coords() to set plot_coords attribute
-               (3)self.plot_it() to make the actual plot
-
-        Keyword arguments:
-            orientation: 'left','right','bottom', or 'top' (default is to use object property .orientation)
-            scale: float setting figure scaling (default is to use object property .scale)
-            figsize: size-2 tuple with hxw (default= (20,20))
-
-        """
-        if initial_leafspacing is None:initial_leafspacing=self.initial_leafspacing
-        if orientation is None: orientation=self.orientation
-        if scale is None: scale=self.scale
-        leafspacing=initial_leafspacing*scale
-
-        mpl_plot_branch(self.tree,0,0,initial_leafspacing) #builds tree into ete3 tree
-        self.set_plot_coords(orientation,scale) #adjusts these using scale/orientation
-        self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
-
-        if ax is None:
-            plt.figure(figsize=figsize)
-            ax=plt.gca()
-
-        self.plot_it(ax,orientation,leafspacing) #self.decorated_plot_coords gets set in here
-        #return silly
-        self.trim_plotspace(ax,orientation,leafspacing) #and used here
     def set_cluster_size(self):
         """ 
         Method to add .cluster_relsize feature to each node in the .tree
@@ -208,6 +185,141 @@ class EteMplTree:
             cluster_sizes=[len(l.accs) for l in self.tree.get_leaves()]
             for l in self.tree.get_leaves():
                 l.add_feature('cluster_relsize',np.log(len(l.accs)+1)/np.log(max(cluster_sizes)+1))
+
+    def render(self,orientation=None,scale=None,figsize:Iterable=(20,20),initial_leafspacing:float=None,\
+               tree_lw:float=None,tree_color:str=None,create_leaf_names:bool=None,draw_leaf_names:bool=None,\
+                ax=None):
+        """ method to generate figure.
+        Calls: (1)ete_set_branch_coordinates to set node attributes,
+               (2)self.get_plot_coords() to set plot_coords attribute
+               (3)self.plot_it() to make the actual plot
+
+        Keyword arguments:
+            orientation: 'left','right','bottom', or 'top' (default is to use object property .orientation)
+            scale: float setting figure scaling (default is to use object property .scale)
+            figsize: size-2 tuple with hxw (default= (20,20))
+
+        """
+        #get all settings, falling back to class
+        if initial_leafspacing is None:initial_leafspacing=self.initial_leafspacing
+        if orientation is None: orientation=self.orientation
+        if scale is None: scale=self.scale
+        if tree_lw is None: tree_lw=self.tree_lw
+        if tree_color is None: tree_color=self.tree_color
+        if create_leaf_names is None: create_leaf_names=self.create_leaf_names
+        if draw_leaf_names is None: draw_leaf_names=self.draw_leaf_names
+        leafspacing=initial_leafspacing*scale
+        #get branch relative positioning
+        ete_set_branch_coordinates(self.tree,0,0,initial_leafspacing) #builds tree into ete3 tree
+        if ax is None:
+            plt.figure(figsize=figsize)
+            ax=plt.gca()
+        #uses defaults and tree's coordinates set above to plot the tree
+        self._plotit(ax,orientation,scale,leafspacing,tree_lw,tree_color,create_leaf_names,draw_leaf_names)
+
+        #now get various utility attributes 
+        self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
+
+    def _plotit(self,ax,orientation,scale,leafspacing,tree_lw,tree_color,create_leaf_names,draw_leaf_names):
+        """ method to generate figure. 
+        Currently called from within render() method as that first calls necessary get_plot_coordinates() method
+        """
+        self.set_plot_coords(orientation,scale) #adjusts these using scale/orientation
+
+        ax.get_figure().canvas.draw()
+        print(leafspacing)
+        for node in self.tree.traverse():
+            ax.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=tree_lw,color=tree_color)
+            if node.is_leaf() is False:
+                ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=tree_lw,color=tree_color)
+        self.tree_plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
+        dpc=self.tree_plot_coords[:] #dpc=decorated plot coordinates, first=tree coordinates,updated on each decoration
+        dpc=self.add_cluster_visualization(ax,orientation,leafspacing,dpc)
+        if draw_leaf_names:
+            dpc=self.draw_lnames(ax,orientation,leafspacing,create_leaf_names,dpc)
+        if self.dashed_leaves:
+            dpc=self.add_leaf_dashextensions(ax,orientation,dpc)
+        #set this after all decorations...
+        self.decorated_plot_coords=dpc
+
+        #final call  
+        self.trim_plotspace(ax,orientation,leafspacing,self.tree_plot_coords,self.decorated_plot_coords)  
+
+        #now do the plot & remove "useless" axes
+        plt.plot()
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    def draw_lnames(self,ax,orientation,leafspacing,create_leaf_names,plotcoords):
+        inverter = ax.transData.inverted()
+        #ax.get_figure().canvas.draw()
+        if create_leaf_names:
+            name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ','ABCDEFGHIJKLMNOPQRSRTUVWXYZ')
+            for lnode in self.tree.get_leaves():
+                lnode.name=functools.reduce(lambda x,y:x+y,next(name_iter))
+#                print(lnode.name)
+        for lnode in self.tree.get_leaves():
+            if orientation in ['left','right']:
+                bbox_props=dict(boxstyle='square',fc='white',lw=0,alpha=0)
+                texty=ax.text(lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[1][0]-leafspacing,
+                        lnode.name,bbox=bbox_props,ha='right')
+                tbox=texty.get_bbox_patch()
+                twindow=tbox.get_extents()
+                #twindow=inverter.transform(twindow)
+#                print(twindow)
+#                tmrkrl2d=texty.get_tightbbox(ax)
+#                tmrkr_bounds=inverter.transform(tmrkrl2d.corners())
+#                txbounds=[x[0] for x in twindow]
+#                tybounds=[x[1] for x in twindow]
+#                txbounds=[x[0] for x in twindow]
+#                tybounds=[x[1] for x in twindow]
+                plotcoords[0]=[min(plotcoords[0][0],twindow.x0),
+                                               max(plotcoords[0][1],twindow.x1)]
+                plotcoords[1]=[min(plotcoords[1][0],twindow.y1),
+                                               max(plotcoords[1][1],twindow.y1)]
+        return plotcoords
+
+
+    def add_cluster_visualization(self,ax,orientation,leafspacing,plotcoords):
+        inverter = ax.transData.inverted()
+        if self.cluster_feature=='accs':
+            dummy=ax.transData.transform((leafspacing,leafspacing))#leafspacing
+            if orientation in ['left','right']:
+                fig_leafspacing=dummy[1]
+            elif orientation in ['bottom','top']:
+                fig_leafspacing=dummy[0]#-dummy[1]
+            for node in self.tree.get_leaves():
+                cmarker=ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
+                    marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
+                    valign=self.cviz_vadict[orientation]),\
+                     clip_on=False, color='k',ms=np.sqrt(fig_leafspacing)*node.cluster_relsize)
+                cmrkrl2d=cmarker[0].get_tightbbox(ax)
+                cmrkr_bounds=inverter.transform(cmrkrl2d.corners())
+                cmrkr_xbounds=[x[0] for x in cmrkr_bounds]
+                cmrkr_ybounds=[x[1] for x in cmrkr_bounds]
+                plotcoords[0]=[min(plotcoords[0][0],*cmrkr_xbounds),
+                                               max(plotcoords[0][1],*cmrkr_xbounds)]
+                plotcoords[1]=[min(plotcoords[1][0],*cmrkr_ybounds),
+                                               max(plotcoords[1][1],*cmrkr_ybounds)]
+        return plotcoords
+
+    def add_leaf_dashextensions(self,ax,orientation,plotcoords):
+        for lnode in self.tree.get_leaves():
+            if orientation=='left':
+                xs=[lnode.stem_plot_coords[0][-1],plotcoords[0][1]]
+                ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
+            if orientation=='right':
+                xs=[lnode.stem_plot_coords[0][-1],plotcoords[0][0]]
+                ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
+            if orientation=='bottom':
+                xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
+                ys=[lnode.stem_plot_coords[1][-1],plotcoords[1][1]]
+            if orientation=='top':
+                xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
+                ys=[lnode.stem_plot_coords[1][-1],plotcoords[1][0]]
+            ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
+        return plotcoords #right now this makes no changes
+
     def set_plot_coords(self,orientation,scale):
         """ 
         Method to calculate plot coordinates. Calculates then adds feature 'base_plot_coordinates' 
@@ -243,61 +355,11 @@ class EteMplTree:
                     base_coords[0]*=-1
                     base_coords[1]*=-1
                 node.add_feature('base_plot_coords',base_coords)
-    def plot_it(self,ax,orientation,leafspacing):
-        """ method to generate figure. 
-        Currently called from within render() method as that first calls necessary get_plot_coordinates() method
-        """
-        for node in self.tree.traverse():
-            ax.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=3.0,color='black')
-            if node.is_leaf() is False:
-                ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=3.0,color='black')
-        self.plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
-        self.decorated_plot_coords=self.plot_coords[:]
-        #print(self.plot_coords)
-        inverter = ax.transData.inverted()
-        if self.cluster_feature=='accs':
-            dummy=ax.transData.transform((leafspacing,leafspacing))#leafspacing
-            if orientation in ['left','right']:
-                fig_leafspacing=dummy[1]
-            elif orientation in ['bottom','top']:
-                fig_leafspacing=dummy[0]#-dummy[1]
-            for node in self.tree.get_leaves():
-                cmarker=ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
-                    marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
-                    valign=self.cviz_vadict[orientation]),\
-                     clip_on=False, color='k',ms=np.sqrt(fig_leafspacing)*node.cluster_relsize)
-                cmrkrl2d=cmarker[0].get_tightbbox(ax)
-                cmrkr_bounds=inverter.transform(cmrkrl2d.corners())
-                cmrkr_xbounds=[x[0] for x in cmrkr_bounds]
-                cmrkr_ybounds=[x[1] for x in cmrkr_bounds]
-                self.decorated_plot_coords[0]=[min(self.decorated_plot_coords[0][0],*cmrkr_xbounds),
-                                               max(self.decorated_plot_coords[0][1],*cmrkr_xbounds)]
-                self.decorated_plot_coords[1]=[min(self.decorated_plot_coords[1][0],*cmrkr_ybounds),
-                                               max(self.decorated_plot_coords[1][1],*cmrkr_ybounds)]
-        #print(self.decorated_plot_coords)
-        if self.dashed_leaves:
-            for lnode in self.tree.get_leaves():
-                if orientation=='left':
-                    xs=[lnode.stem_plot_coords[0][-1],self.decorated_plot_coords[0][1]]
-                    ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
-                if orientation=='right':
-                    xs=[lnode.stem_plot_coords[0][-1],self.decorated_plot_coords[0][0]]
-                    ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
-                if orientation=='bottom':
-                    xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
-                    ys=[lnode.stem_plot_coords[1][-1],self.decorated_plot_coords[1][1]]
-                if orientation=='top':
-                    xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
-                    ys=[lnode.stem_plot_coords[1][-1],self.decorated_plot_coords[1][0]]
-                ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
-            plt.plot()
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-    def trim_plotspace(self,ax,orientation,leafspacing):
+ 
+    def trim_plotspace(self,ax,orientation,leafspacing,tree_plot_coords,decorated_plot_coords):
         #this can be improved! should adjust scale using cluster glyph locations...
-        cur_mins=ax.transData.transform([x[0] for x in self.decorated_plot_coords])
-        cur_maxes=ax.transData.transform([x[1] for x in self.decorated_plot_coords])
+        cur_mins=ax.transData.transform([x[0] for x in decorated_plot_coords])
+        cur_maxes=ax.transData.transform([x[1] for x in decorated_plot_coords])
         print('.',cur_mins,cur_maxes)
         inv=ax.transData.inverted()
         if orientation in ['left','right']:
@@ -306,14 +368,14 @@ class EteMplTree:
             cur_mins=inv.transform([x for x in cur_mins])
             cur_maxes=inv.transform([x for x in cur_maxes])
             ax.set_xlim(cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
-            ax.set_ylim(self.plot_coords[1][0]-0.5*leafspacing,self.plot_coords[1][1]+0.5*leafspacing)
+            ax.set_ylim(tree_plot_coords[1][0]-0.5*leafspacing,tree_plot_coords[1][1]+0.5*leafspacing)
         elif orientation in ['top','bottom']:
             cur_mins[1]-=2
             cur_maxes[1]+=2
             cur_mins=inv.transform([x for x in cur_mins])
             cur_maxes=inv.transform([x for x in cur_maxes])
             ax.set_ylim(cur_mins[1],cur_maxes[1])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
-            ax.set_xlim(self.plot_coords[0][0]-0.5*leafspacing,self.plot_coords[0][1]+0.5*leafspacing)
+            ax.set_xlim(tree_plot_coords[0][0]-0.5*leafspacing,tree_plot_coords[0][1]+0.5*leafspacing)
                 
             
 
