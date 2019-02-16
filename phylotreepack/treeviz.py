@@ -1,4 +1,5 @@
-import itertools,functools
+import itertools,functools,collections
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Iterable
@@ -6,6 +7,7 @@ from ete3 import Tree
 from matplotlib import markers
 from matplotlib.path import Path
 from operator import attrgetter
+from dataclasses import dataclass
 #from functools import reduce
 #from itertools import product
 
@@ -131,6 +133,67 @@ def ete_set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     return ycoord_ascend,ycoord_descend
 #from matplotlib.axes import Axes
 #from matplotlib.transforms import IdentityTransform
+
+@dataclass(repr=True)
+class FigureCoordBox:
+    xmin:float=None
+    xmax:float=None
+    ymin:float=None
+    ymax:float=None
+    def copy(self):
+        return FigureCoordBox(self.xmin,self.xmax,self.ymin,self.ymax)
+
+class NodeLayout:
+    def __init__(self,ax=None,steml2d:mpl.lines.Line2D=None,basel2d:mpl.lines.Line2D=None,
+                      orientation:str=None,leafspacing:float=None):
+        self.ax=ax
+        self.inverter=self.ax.transData.inverted()
+        self.orientation=orientation
+        figure_coords=steml2d.get_window_extent(self.ax)
+        if orientation in ['left','right']:
+            self.treebox_figureheight=np.abs(figure_coords.y1-figure_coords.y0)
+        elif orientation in ['top','bottom']:
+            self.treebox_figureheight=np.abs(figure_coords.x1-figure_coords.x0)
+        self.stem_xycoords=self.inverter.transform(figure_coords)
+        sycoord=np.array([self.stem_xycoords[0][1],self.stem_xycoords[1][1]])
+        sxcoord=np.array([self.stem_xycoords[0][0],self.stem_xycoords[1][0]])
+        if orientation in ['left','right']:
+            stembox_y=np.concatenate(( np.array([x-0.5*leafspacing for x in sycoord]), np.array([x+0.5*leafspacing for x in sycoord]) ))
+            stembox_x=np.concatenate((sxcoord,sxcoord))
+        elif orientation in ['bottom','top']:
+            stembox_x=np.concatenate(( np.array([x-0.5*leafspacing for x in sxcoord]), np.array([x+0.5*leafspacing for x in sxcoord]) ))
+            stembox_y=np.concatenate((sycoord,sycoord))
+        self.treebox=self.get_boundbox(stembox_x,stembox_y)
+        self.branch_glyphs=[] #glyphs appended to end of stem
+        self.align_glyphs=[] #glyphs appended to edge of tree (defined by all leaf nodes)
+        self.branchbox=self.treebox.copy() #try this for now
+        self.alignbox=self.treebox.copy()
+        self.prep_next_branch_glyph()
+       
+    def add_branch_glyph_box(self,xypairs):
+        branch_xarray=np.concatenate((np.array([self.branchbox.xmin,self.branchbox.xmax]),
+                                       np.array([x[0] for x in xypairs])))
+        branch_yarray=np.concatenate((np.array([self.branchbox.ymin,self.branchbox.ymax]),
+                                       np.array([x[1] for x in xypairs])))
+        self.branchbox=self.get_boundbox(branch_xarray,branch_yarray)
+        self.prep_next_branch_glyph()
+
+    def prep_next_branch_glyph(self):
+        if self.orientation=='left':
+            self.nextbranch_x=self.branchbox.xmax
+        if self.orientation=='right':
+            self.nextbranch_x=self.branchbox.xmin
+        if self.orientation in ['left','right']:
+            self.nextbranch_y=0.5*(self.branchbox.ymax+self.branchbox.ymin)
+  
+    def get_boundbox(self,xarray,yarray):
+        xmin=min(xarray)
+        xmax=max(xarray)
+        ymin=min(yarray)
+        ymax=max(yarray)
+        return FigureCoordBox(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)
+
+
 class EteMplTree:
     """Class for plotting an ete3 tree using matplotlib rendering
 
@@ -220,6 +283,7 @@ class EteMplTree:
         #now get various utility attributes 
         self.ordered_leaves=sorted(self.tree.get_leaves(),key=lambda x:x.stem_coord_offset[0],reverse=True)
 
+
     def _plotit(self,ax,orientation,scale,leafspacing,tree_lw,tree_color,create_leaf_names,draw_leaf_names):
         """ method to generate figure. 
         Currently called from within render() method as that first calls necessary get_plot_coordinates() method
@@ -227,14 +291,27 @@ class EteMplTree:
         self.set_plot_coords(orientation,scale) #adjusts these using scale/orientation
 
         ax.get_figure().canvas.draw()
-        print(leafspacing)
-        for node in self.tree.traverse():
-            ax.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=tree_lw,color=tree_color)
+        #plot the tree and create NodeLayout feature
+        l2r=list(self.tree.traverse())[::-1] #sorted deepest to ro
+        for node in l2r:
+            stemplot=ax.plot(node.stem_plot_coords[0],node.stem_plot_coords[1],lw=tree_lw,color=tree_color)
+            stemplot_l2d=stemplot[0]
             if node.is_leaf() is False:
-                ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=tree_lw,color=tree_color)
+                baseplot=ax.plot(node.base_plot_coords[0],node.base_plot_coords[1],lw=tree_lw,color=tree_color)
+                baseplot_l2d=baseplot[0]
+            else:
+                baseplot_l2d=None
+            node.add_feature('node_layout',NodeLayout(ax=ax,steml2d=stemplot_l2d,basel2d=baseplot_l2d,\
+                              orientation=orientation,leafspacing=leafspacing))
+        fig_leafspacing=None
+        converter=ax.transData.transform([leafspacing,leafspacing])
+        if orientation in ['left','right']:
+            fig_leafspacing=converter[1]
+        elif orientation in ['top','bottom']:
+            fig_leafspacing=converter[0]
         self.tree_plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
         dpc=self.tree_plot_coords[:] #dpc=decorated plot coordinates, first=tree coordinates,updated on each decoration
-        dpc=self.add_cluster_visualization(ax,orientation,leafspacing,dpc)
+        dpc=self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
         if draw_leaf_names:
             dpc=self.draw_lnames(ax,orientation,leafspacing,create_leaf_names,dpc)
         if self.dashed_leaves:
@@ -251,20 +328,20 @@ class EteMplTree:
         ax.set_yticks([])
 
     def draw_lnames(self,ax,orientation,leafspacing,create_leaf_names,plotcoords):
-        inverter = ax.transData.inverted()
-        #ax.get_figure().canvas.draw()
         if create_leaf_names:
             name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ','ABCDEFGHIJKLMNOPQRSRTUVWXYZ')
             for lnode in self.tree.get_leaves():
                 lnode.name=functools.reduce(lambda x,y:x+y,next(name_iter))
 #                print(lnode.name)
         for lnode in self.tree.get_leaves():
+            nl=lnode.node_layout
             if orientation in ['left','right']:
                 bbox_props=dict(boxstyle='square',fc='white',lw=0,alpha=0)
-                texty=ax.text(lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[1][0]-leafspacing,
+                texty=ax.text(nl.nextbranch_x,nl.nextbranch_ylnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[1][0]-leafspacing,
                         lnode.name,bbox=bbox_props,ha='right')
                 tbox=texty.get_bbox_patch()
                 twindow=tbox.get_extents()
+                print(twindow)
                 #twindow=inverter.transform(twindow)
 #                print(twindow)
 #                tmrkrl2d=texty.get_tightbbox(ax)
@@ -273,35 +350,25 @@ class EteMplTree:
 #                tybounds=[x[1] for x in twindow]
 #                txbounds=[x[0] for x in twindow]
 #                tybounds=[x[1] for x in twindow]
-                plotcoords[0]=[min(plotcoords[0][0],twindow.x0),
-                                               max(plotcoords[0][1],twindow.x1)]
-                plotcoords[1]=[min(plotcoords[1][0],twindow.y1),
-                                               max(plotcoords[1][1],twindow.y1)]
+#                plotcoords[0]=[min(plotcoords[0][0],twindow.x0),
+#                                               max(plotcoords[0][1],twindow.x1)]
+#                plotcoords[1]=[min(plotcoords[1][0],twindow.y1),
+#                                               max(plotcoords[1][1],twindow.y1)]
         return plotcoords
 
 
-    def add_cluster_visualization(self,ax,orientation,leafspacing,plotcoords):
-        inverter = ax.transData.inverted()
+    def add_cluster_visualization(self,ax,orientation,leafspacing,fig_leafspacing):
+        inverter=ax.transData.inverted()
         if self.cluster_feature=='accs':
-            dummy=ax.transData.transform((leafspacing,leafspacing))#leafspacing
-            if orientation in ['left','right']:
-                fig_leafspacing=dummy[1]
-            elif orientation in ['bottom','top']:
-                fig_leafspacing=dummy[0]#-dummy[1]
             for node in self.tree.get_leaves():
-                cmarker=ax.plot(node.stem_plot_coords[0][-1],node.stem_plot_coords[1][-1],\
+                nl=node.node_layout
+                cmarker=ax.plot(nl.nextbranch_x,nl.nextbranch_y,\
                     marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
                     valign=self.cviz_vadict[orientation]),\
                      clip_on=False, color='k',ms=np.sqrt(fig_leafspacing)*node.cluster_relsize)
-                cmrkrl2d=cmarker[0].get_tightbbox(ax)
-                cmrkr_bounds=inverter.transform(cmrkrl2d.corners())
-                cmrkr_xbounds=[x[0] for x in cmrkr_bounds]
-                cmrkr_ybounds=[x[1] for x in cmrkr_bounds]
-                plotcoords[0]=[min(plotcoords[0][0],*cmrkr_xbounds),
-                                               max(plotcoords[0][1],*cmrkr_xbounds)]
-                plotcoords[1]=[min(plotcoords[1][0],*cmrkr_ybounds),
-                                               max(plotcoords[1][1],*cmrkr_ybounds)]
-        return plotcoords
+                tbbox=cmarker[0].get_tightbbox(ax)
+                dabounds=inverter.transform(tbbox.corners())
+                nl.add_branch_glyph_box(dabounds)
 
     def add_leaf_dashextensions(self,ax,orientation,plotcoords):
         for lnode in self.tree.get_leaves():
