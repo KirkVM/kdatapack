@@ -185,6 +185,13 @@ class NodeLayout:
             self.nextbranch_x=self.branchbox.xmin
         if self.orientation in ['left','right']:
             self.nextbranch_y=0.5*(self.branchbox.ymax+self.branchbox.ymin)
+
+        if self.orientation=='top':
+            self.nextbranch_y=self.branchbox.ymin
+        if self.orientation=='bottom':
+            self.nextbranch_y=self.branchbox.ymax
+        if self.orientation in ['top','bottom']:
+            self.nextbranch_x=0.5*(self.branchbox.xmax+self.branchbox.xmin)
   
     def get_boundbox(self,xarray,yarray):
         xmin=min(xarray)
@@ -223,8 +230,8 @@ class EteMplTree:
         self.dashed_leaves=True
         self.cluster_viz='triangle'
         self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
-        self.cviz_hadict={'left':'left','right':'right','top':'middle','bottom':'middle'}
-        self.cviz_vadict={'left':'middle','right':'middle','top':'top','bottom':'bottom'}
+        self.cviz_hadict={'left':'left','right':'right','top':'center','bottom':'center'}
+        self.cviz_vadict={'left':'center','right':'center','top':'top','bottom':'bottom'}
         self.tree_lw=3.0
         self.tree_color='black'
         self.initial_leafspacing=0.1
@@ -277,6 +284,7 @@ class EteMplTree:
         if ax is None:
             plt.figure(figsize=figsize)
             ax=plt.gca()
+        ax.get_figure().canvas.draw()
         #uses defaults and tree's coordinates set above to plot the tree
         self._plotit(ax,orientation,scale,leafspacing,tree_lw,tree_color,create_leaf_names,draw_leaf_names)
 
@@ -290,7 +298,6 @@ class EteMplTree:
         """
         self.set_plot_coords(orientation,scale) #adjusts these using scale/orientation
 
-        ax.get_figure().canvas.draw()
         #plot the tree and create NodeLayout feature
         l2r=list(self.tree.traverse())[::-1] #sorted deepest to ro
         for node in l2r:
@@ -303,59 +310,42 @@ class EteMplTree:
                 baseplot_l2d=None
             node.add_feature('node_layout',NodeLayout(ax=ax,steml2d=stemplot_l2d,basel2d=baseplot_l2d,\
                               orientation=orientation,leafspacing=leafspacing))
+        self.tree_plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
+
         fig_leafspacing=None
         converter=ax.transData.transform([leafspacing,leafspacing])
         if orientation in ['left','right']:
             fig_leafspacing=converter[1]
         elif orientation in ['top','bottom']:
             fig_leafspacing=converter[0]
-        self.tree_plot_coords=[[ax.dataLim.x0,ax.dataLim.x1],[ax.dataLim.y0,ax.dataLim.y1]]
-        dpc=self.tree_plot_coords[:] #dpc=decorated plot coordinates, first=tree coordinates,updated on each decoration
-        dpc=self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
+        self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
         if draw_leaf_names:
-            dpc=self.draw_lnames(ax,orientation,leafspacing,create_leaf_names,dpc)
+            self.draw_lnames(ax,orientation,leafspacing,create_leaf_names,fig_leafspacing)
         if self.dashed_leaves:
-            dpc=self.add_leaf_dashextensions(ax,orientation,dpc)
-        #set this after all decorations...
-        self.decorated_plot_coords=dpc
-
-        #final call  
-        self.trim_plotspace(ax,orientation,leafspacing,self.tree_plot_coords,self.decorated_plot_coords)  
-
-        #now do the plot & remove "useless" axes
-        plt.plot()
+            self.add_leaf_dashextensions(ax,orientation)
+        self.trim_plotspace(ax,orientation,self.tree_plot_coords)#,self.decorated_plot_coords)  
         ax.set_xticks([])
         ax.set_yticks([])
 
-    def draw_lnames(self,ax,orientation,leafspacing,create_leaf_names,plotcoords):
+    def draw_lnames(self,ax,orientation,leafspacing,create_leaf_names,fig_leafspacing):
+        inverter=ax.transData.inverted()
         if create_leaf_names:
             name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ','ABCDEFGHIJKLMNOPQRSRTUVWXYZ')
             for lnode in self.tree.get_leaves():
                 lnode.name=functools.reduce(lambda x,y:x+y,next(name_iter))
-#                print(lnode.name)
         for lnode in self.tree.get_leaves():
             nl=lnode.node_layout
-            if orientation in ['left','right']:
-                bbox_props=dict(boxstyle='square',fc='white',lw=0,alpha=0)
-                texty=ax.text(nl.nextbranch_x,nl.nextbranch_ylnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[1][0]-leafspacing,
-                        lnode.name,bbox=bbox_props,ha='right')
-                tbox=texty.get_bbox_patch()
-                twindow=tbox.get_extents()
-                print(twindow)
-                #twindow=inverter.transform(twindow)
-#                print(twindow)
-#                tmrkrl2d=texty.get_tightbbox(ax)
-#                tmrkr_bounds=inverter.transform(tmrkrl2d.corners())
-#                txbounds=[x[0] for x in twindow]
-#                tybounds=[x[1] for x in twindow]
-#                txbounds=[x[0] for x in twindow]
-#                tybounds=[x[1] for x in twindow]
-#                plotcoords[0]=[min(plotcoords[0][0],twindow.x0),
-#                                               max(plotcoords[0][1],twindow.x1)]
-#                plotcoords[1]=[min(plotcoords[1][0],twindow.y1),
-#                                               max(plotcoords[1][1],twindow.y1)]
-        return plotcoords
-
+            #if orientation in ['left','right']:
+            bbox_props=dict(boxstyle='square',fc='white',lw=0,alpha=0)
+            #    texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.name,bbox=bbox_props,\
+            #                    ha='left',va='center',size=0.33*np.sqrt(fig_leafspacing))
+            texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.name,bbox=bbox_props,\
+                           ha=self.cviz_hadict[orientation],va=self.cviz_vadict[orientation],size=0.5*np.sqrt(fig_leafspacing))
+            #the .draw() here is required to get box locations. THIS. IS. SLOOOWWW? Any other ways?
+            ax.get_figure().canvas.draw() 
+            tbox_ext=texty.get_bbox_patch().get_window_extent()
+            twindow=inverter.transform(tbox_ext)
+            nl.add_branch_glyph_box(twindow)
 
     def add_cluster_visualization(self,ax,orientation,leafspacing,fig_leafspacing):
         inverter=ax.transData.inverted()
@@ -370,22 +360,29 @@ class EteMplTree:
                 dabounds=inverter.transform(tbbox.corners())
                 nl.add_branch_glyph_box(dabounds)
 
-    def add_leaf_dashextensions(self,ax,orientation,plotcoords):
+    def add_leaf_dashextensions(self,ax,orientation):
+        inverter=ax.transData.inverted()
+        nlxs=[lnode.node_layout.nextbranch_x for lnode in self.tree.get_leaves()]
+        nlys=[lnode.node_layout.nextbranch_y for lnode in self.tree.get_leaves()]
         for lnode in self.tree.get_leaves():
+            nl=lnode.node_layout
             if orientation=='left':
-                xs=[lnode.stem_plot_coords[0][-1],plotcoords[0][1]]
-                ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
-            if orientation=='right':
-                xs=[lnode.stem_plot_coords[0][-1],plotcoords[0][0]]
-                ys=[lnode.stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
-            if orientation=='bottom':
-                xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
-                ys=[lnode.stem_plot_coords[1][-1],plotcoords[1][1]]
-            if orientation=='top':
-                xs=[lnode.stem_plot_coords[0][-1],lnode.stem_plot_coords[0][-1]]
-                ys=[lnode.stem_plot_coords[1][-1],plotcoords[1][0]]
-            ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
-        return plotcoords #right now this makes no changes
+                xs=[nl.nextbranch_x,max(nlxs)]#stem_plot_coords[0][-1],plotcoords[0][1]]
+                ys=[nl.nextbranch_y,nl.nextbranch_y]#stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
+            elif orientation=='right':
+                xs=[nl.nextbranch_x,min(nlxs)]#stem_plot_coords[0][-1],plotcoords[0][1]]
+                ys=[nl.nextbranch_y,nl.nextbranch_y]#stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
+            elif orientation=='top':
+                xs=[nl.nextbranch_x,nl.nextbranch_x]#stem_plot_coords[0][-1],plotcoords[0][1]]
+                ys=[nl.nextbranch_y,min(nlys)]#stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
+            elif orientation=='bottom':
+                xs=[nl.nextbranch_x,nl.nextbranch_x]#stem_plot_coords[0][-1],plotcoords[0][1]]
+                ys=[nl.nextbranch_y,max(nlys)]#stem_plot_coords[1][-1],lnode.stem_plot_coords[1][-1]]
+            dashy=ax.plot(xs,ys,lw=1,ls='--',zorder=0,color='gray')
+            tbbox=dashy[0].get_tightbbox(ax)
+            dabounds=inverter.transform(tbbox.corners())
+            nl.add_branch_glyph_box(dabounds)
+
 
     def set_plot_coords(self,orientation,scale):
         """ 
@@ -422,29 +419,32 @@ class EteMplTree:
                     base_coords[0]*=-1
                     base_coords[1]*=-1
                 node.add_feature('base_plot_coords',base_coords)
- 
-    def trim_plotspace(self,ax,orientation,leafspacing,tree_plot_coords,decorated_plot_coords):
-        #this can be improved! should adjust scale using cluster glyph locations...
-        cur_mins=ax.transData.transform([x[0] for x in decorated_plot_coords])
-        cur_maxes=ax.transData.transform([x[1] for x in decorated_plot_coords])
-        print('.',cur_mins,cur_maxes)
-        inv=ax.transData.inverted()
-        if orientation in ['left','right']:
-            cur_mins[0]-=2
-            cur_maxes[0]+=2
-            cur_mins=inv.transform([x for x in cur_mins])
-            cur_maxes=inv.transform([x for x in cur_maxes])
-            ax.set_xlim(cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
-            ax.set_ylim(tree_plot_coords[1][0]-0.5*leafspacing,tree_plot_coords[1][1]+0.5*leafspacing)
-        elif orientation in ['top','bottom']:
-            cur_mins[1]-=2
-            cur_maxes[1]+=2
-            cur_mins=inv.transform([x for x in cur_mins])
-            cur_maxes=inv.transform([x for x in cur_maxes])
-            ax.set_ylim(cur_mins[1],cur_maxes[1])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
-            ax.set_xlim(tree_plot_coords[0][0]-0.5*leafspacing,tree_plot_coords[0][1]+0.5*leafspacing)
-                
-            
+
+    def trim_plotspace(self,ax,orientation,tree_plot_coords):
+        xmin=tree_plot_coords[0][0]
+        xmax=tree_plot_coords[0][1]
+        ymin=tree_plot_coords[1][0]
+        ymax=tree_plot_coords[1][1]
+        for lnode in self.tree.get_leaves():
+            nl=lnode.node_layout
+            xmin=min(xmin,nl.branchbox.xmin)
+            xmax=max(xmax,nl.branchbox.xmax)
+            ymin=min(ymin,nl.branchbox.ymin)
+            ymax=max(ymax,nl.branchbox.ymax)
+        coords=[[xmin,ymin],[xmax,ymax]]
+        fig_coords=ax.transData.transform(coords)
+        fig_coords[0][0]-=2
+        fig_coords[0][1]-=2
+        fig_coords[1][0]+=2
+        fig_coords[1][1]+=2
+        fig_coords=ax.transData.inverted().transform(fig_coords)
+        ax.set_xlim(fig_coords[0][0],fig_coords[1][0])#cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
+        ax.set_ylim(fig_coords[0][1],fig_coords[1][1])#cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
+#        ax.set_ylim(ymin,ymax)#tree_plot_coords[1][0]-0.5*leafspacing,tree_plot_coords[1][1]+0.5*leafspacing)
+#        xmin=ax.transData.transform()
+#        ax.set_xlim(xmin,xmax)#cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
+#        ax.set_ylim(ymin,ymax)#tree_plot_coords[1][0]-0.5*leafspacing,tree_plot_coords[1][1]+0.5*leafspacing)
+
 
 #plt.gca().set_xlim(0.0,3.3)
 #plt.gca().spines['left'].set_visible(False)
