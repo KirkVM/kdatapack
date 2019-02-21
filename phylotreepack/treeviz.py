@@ -333,6 +333,7 @@ class EteMplTree:
             name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ','ABCDEFGHIJKLMNOPQRSRTUVWXYZ')
             for lnode in self.tree.get_leaves():
                 lnode.name=functools.reduce(lambda x,y:x+y,next(name_iter))
+        texty_dict={}
         for lnode in self.tree.get_leaves():
             nl=lnode.node_layout
             #if orientation in ['left','right']:
@@ -341,9 +342,11 @@ class EteMplTree:
             #                    ha='left',va='center',size=0.33*np.sqrt(fig_leafspacing))
             texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.name,bbox=bbox_props,\
                            ha=self.cviz_hadict[orientation],va=self.cviz_vadict[orientation],size=0.5*np.sqrt(fig_leafspacing))
-            #the .draw() here is required to get box locations. THIS. IS. SLOOOWWW? Any other ways?
-            ax.get_figure().canvas.draw() 
-            tbox_ext=texty.get_bbox_patch().get_window_extent()
+            texty_dict[nl]=texty
+        #the .draw() here is required to get box locations, so run once then do adds to each box
+        ax.get_figure().canvas.draw() 
+        for nl in texty_dict.keys():
+            tbox_ext=texty_dict[nl].get_bbox_patch().get_window_extent()
             twindow=inverter.transform(tbox_ext)
             nl.add_branch_glyph_box(twindow)
 
@@ -427,16 +430,22 @@ class EteMplTree:
         ymax=tree_plot_coords[1][1]
         for lnode in self.tree.get_leaves():
             nl=lnode.node_layout
-            xmin=min(xmin,nl.branchbox.xmin)
-            xmax=max(xmax,nl.branchbox.xmax)
-            ymin=min(ymin,nl.branchbox.ymin)
-            ymax=max(ymax,nl.branchbox.ymax)
+            if orientation in ['left','right']:
+                xmin=min(xmin,nl.branchbox.xmin)
+                xmax=max(xmax,nl.branchbox.xmax)
+                ymin=min(ymin,nl.treebox.ymin)
+                ymax=max(ymax,nl.treebox.ymax)
+            elif orientation in ['top','bottom']:
+                xmin=min(xmin,nl.treebox.xmin)
+                xmax=max(xmax,nl.treebox.xmax)
+                ymin=min(ymin,nl.branchbox.ymin)
+                ymax=max(ymax,nl.branchbox.ymax)
         coords=[[xmin,ymin],[xmax,ymax]]
         fig_coords=ax.transData.transform(coords)
-        fig_coords[0][0]-=2
-        fig_coords[0][1]-=2
-        fig_coords[1][0]+=2
-        fig_coords[1][1]+=2
+        #fig_coords[0][0]-=2
+        #fig_coords[0][1]-=2
+        #fig_coords[1][0]+=2
+        #fig_coords[1][1]+=2
         fig_coords=ax.transData.inverted().transform(fig_coords)
         ax.set_xlim(fig_coords[0][0],fig_coords[1][0])#cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
         ax.set_ylim(fig_coords[0][1],fig_coords[1][1])#cur_mins[0],cur_maxes[0])#,transform=IdentityTransform)#,ax.transData)#self.decorated_plot_coords[0][0],self.decorated_plot_coords[0][1]
