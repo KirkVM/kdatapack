@@ -214,7 +214,7 @@ class EteMplTree:
         plot_coords: [xmin,xmax],[ymin,ymax] values for graph
                         (calculated through calling .render() method)
     """
-    def __init__(self,tree:Tree):
+    def __init__(self,tree:Tree,cluster_feature='accs'):
         """ constructor for EteMplTree.
         Calls: self.cluster_size() to add feature .cluster_relsize to each leaf node
 
@@ -222,6 +222,9 @@ class EteMplTree:
             tree: an ete3 tree instance
             [Also currently makes some assumed settings that are configurable public properties-
             -orientation,cluster_feature,cluster_viz,scale]
+        
+        Keyword Arguments:
+            cluster_feature: what feature to use as indication of cluster size: None, 'accs' (default='accs')
         """
 
         self.tree=tree.copy()
@@ -238,7 +241,7 @@ class EteMplTree:
         self.create_leaf_names=False
         self.draw_leaf_names=False
         
-        self.cluster_feature='accs'
+        self.cluster_feature=cluster_feature
         self.set_cluster_size()
 
         self.plot_coords=[[np.inf,-np.inf],[np.inf,-np.inf]]
@@ -250,7 +253,6 @@ class EteMplTree:
         Method to add .cluster_relsize feature to each node in the .tree
         Currently only supports if .cluster_feature=='accs'
         """
- 
         if self.cluster_feature=='accs':
             cluster_sizes=[len(l.accs) for l in self.tree.get_leaves()]
             for l in self.tree.get_leaves():
@@ -330,7 +332,15 @@ class EteMplTree:
     def draw_lnames(self,ax,orientation,leafspacing,create_leaf_names,fig_leafspacing):
         inverter=ax.transData.inverted()
         if create_leaf_names:
-            name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ','ABCDEFGHIJKLMNOPQRSRTUVWXYZ')
+            if len(self.tree)<26:
+                prep=1
+            elif len(self.tree)<676:
+                prep=2
+            elif len(self.tree)<17576:
+                prep=3
+            else:
+                prep=8
+            name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ',repeat=prep)
             for lnode in self.tree.get_leaves():
                 lnode.name=functools.reduce(lambda x,y:x+y,next(name_iter))
         texty_dict={}

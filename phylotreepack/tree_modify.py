@@ -97,14 +97,14 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
     cluster_minsize: minimum size for each cluster (default=5)
     collapse_sisters: whether to merge leaves or groups<threshold into a single branch (default True)
     cleanup_merge: whether to perform final step that clusters all subtrees even if size<cluster_minsize
-    outgroup: node (default=None)
+    outgroup: name of outgroup node (default=None)
     
     Returns: 
-    ete tree file with added feature 'subtrees' and 'cluster_numleaves' for collapsed nodes, 
-    which correspond to a list of child nodes and number of leaves in the cluster
+    ete tree file with added feature 'subtrees', 'cluster_numleaves', and 'accs' for collapsed nodes, 
+    which correspond to a list of child nodes, number of leaves, and all (exapanded) leaf names in the cluster.
+    Collapsed nodes names: 'm_<numsubtrees>_<numleaves>', 's_<numsubtrees>_<numleaves>', 'c_<numsubtrees>_<numleaves>'
     """
-#    print(f'reading newick file {treefpath}')
-#    t=Tree(treefpath)
+    t=t.copy()
     if outgroup is not None:
         t.set_outgroup(t&outgroup)
 
@@ -123,7 +123,7 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
 #                print(f'building a new leaf group: {len(groupaccs_)} lnodes')
                 node.add_feature('cluster_numleaves',len(node.get_leaf_names()))
                 node.add_feature('subtrees',[nc.detach() for nc in node.get_children()])#
-                node.name=f'cool {node.cluster_numleaves} {node.get_distance(node.up)}'
+                node.name=f'm_{len(node.subtrees)}_{node.cluster_numleaves}'
                 cluster_merges.append(len(groupaccs_))
             else:
                 orphans.append(node)
@@ -150,7 +150,7 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
                     newnode.add_feature('subtrees',[cur_orphan.detach()])
                     for so in sis_orphs:
                         newnode.subtrees.append(so.detach())
-                    newnode.name=f'mcool {np.sum([len(x) for x in newnode.subtrees])}'
+                    newnode.name=f's_{len(newnode.subtrees)}_{newnode.cluster_numleaves}'
                     sister_merges.append(size_of_merged)
     print(f'sisters collapse sizes: {sister_merges}')
     #now cleanup_merge
@@ -174,7 +174,7 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
                 if addn is not None:
                     addn.add_feature('cluster_numleaves',len(addn.get_leaf_names()))
                     addn.add_feature('subtrees',[nc.detach() for nc in addn.get_children()])#
-                    addn.name=f'fresh {addn.cluster_numleaves} {addn.get_distance(addn.up)}'
+                    addn.name=f'c_{len(addn.subtrees)}_{addn.cluster_numleaves}'
                     visited=visited.union([x for x in addn.get_leaves()])
                     break #break to reset leaf candidates with updated visited set as filter
 
@@ -198,6 +198,42 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
     print(f'--total leaves at end: {num_leaves}--')
     return t
     #add merge with nephew orphan?
+
+def expand_eteclustertree(ct:Tree,delete_cluster_names=True,delete_cluster_features=True):
+    """expands cluster tree to original topology. 
+    
+    Collapsed sisters are inferred from a cluster node with dist=0 to parent.
+    Returned tree will have some differences in node names from parent?
+    Arguments:
+    ct: the cluster tree
+
+    Keyword Arguments:
+    delete_cluster_names: whether to delete cluster names (default=True)
+    delete_cluster_features: whether to delete cluster features accs,cluster_numleaves,subtrees (default=True)
+
+    Returns:
+    ete tree expanded so that leaves represent single enzymes
+    """
+    ct=ct.copy()
+    for lnode in ct.get_leaves():
+        if 'subtrees' in lnode.features:
+            #special handling for collapsed sisters
+            if lnode.dist==0: 
+                print(f'sister node detected for {lnode.name}')
+                for st in lnode.subtrees:
+                    lnode.up.add_child(st)
+                lnode.detach()
+            else:
+                for st in lnode.subtrees:
+                    lnode.add_child(st)
+                if delete_cluster_names:
+                    lnode.name=''
+                if delete_cluster_features:
+                    lnode.del_feature('subtrees')
+                    lnode.del_feature('cluster_numleaves')
+                    lnode.del_feature('accs')
+        #need to do a check... is this also proper handling collapsed sisters?
+    return ct
 
 def write_clustertree_tonewick(ct:Tree,otfpath:str='clustertree.nw'):
     """redefines node names property according to child leaf accesion codes and writes out as 
