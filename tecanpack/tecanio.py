@@ -25,6 +25,8 @@ class WellRxnReading(WellReading):
     Overrides WellReading and adds rxn and solultion details'''
     rxntime: float = None
     rxntime_units: str = None
+    rxnvessel: str = None
+    rxnvessel_wellid: str = None #in case different from wellid of reading
     incubator: str = None
     rxntemp: float = None
     rxnph: float = None
@@ -112,7 +114,7 @@ def describe_wells(defaultsdict,
                    skipwells=[],itermethod='byrow_wrap',
                    enames=None,econcs=None,snames=None,sconcs=None,
                    standardnames=None,standardconcs=None,rxnphs=None,
-                   rxntemps=None,rxntimes=None,
+                   rxntemps=None,rxntimes=None,buffernames=None,
                    predvlp_dlnfactors=None,postdvlp_dlnfactors=None):
     """
     Takes lists of well settings and returns a list of WellReadings or subclasses as appropriate
@@ -138,6 +140,8 @@ def describe_wells(defaultsdict,
     standardconcs: list of float standard conc vals in each well (default = None)
     rxnphs: list of float rxn ph vals (default = None)
     rxntemps: list of float rxn temp vals (default = None)
+    rxntimes: list of float rxn time vals (default = None)
+    buffernames: list of str buffer names (default = None)
     predvlp_dlnfactors: list of dilution factor before develop step (default = None)
     postdvlp_dlnfactors: list of dilution factor post develop step (default = None)
 
@@ -166,6 +170,8 @@ def describe_wells(defaultsdict,
             well_dict['econc']=econcs[widx]
         if snames is not None:
             well_dict['sname']=snames[widx]
+        if sconcs is not None:
+            well_dict['sconc']=sconcs[widx]
         if standardconcs is not None:
             well_dict['standardconc']=standardconcs[widx]
         if rxnphs is not None:
@@ -174,6 +180,8 @@ def describe_wells(defaultsdict,
             well_dict['rxntemp']=rxntemps[widx]
         if rxntimes is not None:
             well_dict['rxntime']=rxntimes[widx]
+        if buffernames is not None:
+            well_dict['buffernames']=buffernames[widx]
         if predvlp_dlnfactors is not None:
             well_dict['predvlp_dlnfactor']=predvlp_dlnfactors[widx]
         if postdvlp_dlnfactors is not None:
