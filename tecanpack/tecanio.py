@@ -1,9 +1,7 @@
+import datetime,itertools,re,uuid
 import pandas as pd
 import dataclasses
 from dataclasses import dataclass
-import datetime
-import itertools
-import re
 
 @dataclass
 class WellReading:
@@ -18,7 +16,13 @@ class WellReading:
     predvlp_dlnfactor: float = 1.0
     postdvlp_dlnfactor: float = 1.0
     experimenter: str = None
-
+    absorbance_wl: int = None #3/5/19---add these as defaults according to dns/bca/etc
+    excitation_wl: int = None #3/5/19---add these as defaults according to dns/bca/etc
+    src_vesselid: str = None #reflects whether this measurement is unique to a source vessel
+                             #this will by default get a new uuid.uuid4().hex
+                             #somehow incorporate multiple reads from same well intelligence
+#somehow incorporate batches/freshness?
+#add
 @dataclass
 class WellRxnReading(WellReading):
     '''Base class for well involving reaction or incubation.
@@ -48,6 +52,8 @@ class WellEnzymeSubstrateReading(WellRxnReading):
     sname: str = None
     sconc: float = None
     sconc_units: str = None
+    etype: str = None #'cellfree","purified"
+    ename_type: str = "acc" #default is that the name=accession code
 
 @dataclass
 class WellEnzymeControl(WellRxnReading):
@@ -56,6 +62,8 @@ class WellEnzymeControl(WellRxnReading):
     ename: str = None
     econc: float = None
     econc_units: str = None
+    etype: str = None #'cellfree","purified"
+    ename_type: str = "acc" #default is that the name=accession code
 
 @dataclass
 class WellSubstrateControl(WellRxnReading):
@@ -115,7 +123,8 @@ def describe_wells(defaultsdict,
                    enames=None,econcs=None,snames=None,sconcs=None,
                    standardnames=None,standardconcs=None,rxnphs=None,
                    rxntemps=None,rxntimes=None,buffernames=None,
-                   predvlp_dlnfactors=None,postdvlp_dlnfactors=None):
+                   predvlp_dlnfactors=None,postdvlp_dlnfactors=None,
+                   repeat_measurements=None):
     """
     Takes lists of well settings and returns a list of WellReadings or subclasses as appropriate
 
@@ -158,12 +167,22 @@ def describe_wells(defaultsdict,
     elif itermethod=='bycol_wrap':
         allwids_=[''.join(x[::-1]) for x in itertools.product([str(x) for x in pcols],prows)]
     wids_=[x for x in allwids_ if x not in skipwells]
+    #assign src_vesselids
+    svrepsdict={}
+    if repeat_measurements is not None:
+        for rmwellids in repeat_measurements:
+            newsvid=uuid.uuid4().hex
+            svrepsdict.update({x:newsvid for x in rmwellids})
     #iterate through wids_, build a WellReading for each--
     #use defaultsdict but override with one of optional list arguments if present
     #build a well_dict containing all values for each well, then use it to build WellReading object
     for widx,wid in enumerate(wids_):
         well_dict=defaultsdict.copy()
         well_dict['wellid']=wid
+        if wid in svrepsdict.keys():
+            well_dict['src_vesselid']=svrepsdict[wid]
+        else:
+            well_dict['src_vesselid']=uuid.uuid4().hex
         if enames is not None:
             well_dict['ename']=enames[widx]
         if econcs is not None:
@@ -208,4 +227,5 @@ def describe_wells(defaultsdict,
                 print('well not classified')
         wellreads_.append(reading)
         #should check and correct for dilution factor here.........
+
     return wellreads_

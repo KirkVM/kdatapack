@@ -120,7 +120,6 @@ def ete_cluster_bysize(t:Tree,cluster_maxsize:int=50,cluster_minsize:int=5,\
         if numleaves<cluster_maxsize: 
             groupaccs_=node.get_leaf_names()
             if len(groupaccs_)>cluster_minsize:
-#                print(f'building a new leaf group: {len(groupaccs_)} lnodes')
                 node.add_feature('cluster_numleaves',len(node.get_leaf_names()))
                 node.add_feature('subtrees',[nc.detach() for nc in node.get_children()])#
                 node.name=f'm_{len(node.subtrees)}_{node.cluster_numleaves}'

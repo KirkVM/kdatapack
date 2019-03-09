@@ -320,7 +320,7 @@ class EteMplTree:
             fig_leafspacing=converter[1]
         elif orientation in ['top','bottom']:
             fig_leafspacing=converter[0]
-        self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
+#        self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
         if draw_leaf_names:
             self.draw_lnames(ax,orientation,leafspacing,create_leaf_names,fig_leafspacing)
         if self.dashed_leaves:
@@ -342,7 +342,13 @@ class EteMplTree:
                 prep=8
             name_iter=itertools.product('ABCDEFGHIJKLMNOPQRSRTUVWXYZ',repeat=prep)
             for lnode in self.tree.get_leaves():
-                lnode.name=functools.reduce(lambda x,y:x+y,next(name_iter))
+                #for some reason, make sure clustername is initialized to None, otherwise rendering calcs get goofed up
+                lnode.add_feature('clustername',None) 
+                lnode.clustername=functools.reduce(lambda x,y:x+y,next(name_iter))
+        else:
+            for lnode in self.tree.get_leaves():
+                lnode.add_feature('clustername',None)
+                lnode.clustername=lnode.name
         texty_dict={}
         for lnode in self.tree.get_leaves():
             nl=lnode.node_layout
@@ -350,8 +356,8 @@ class EteMplTree:
             bbox_props=dict(boxstyle='square',fc='white',lw=0,alpha=0)
             #    texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.name,bbox=bbox_props,\
             #                    ha='left',va='center',size=0.33*np.sqrt(fig_leafspacing))
-            texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.name,bbox=bbox_props,\
-                           ha=self.cviz_hadict[orientation],va=self.cviz_vadict[orientation],size=0.5*np.sqrt(fig_leafspacing))
+            texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.clustername,bbox=bbox_props,\
+                           ha=self.cviz_hadict[orientation],va=self.cviz_vadict[orientation],size=0.5*np.sqrt(fig_leafspacing))#,rotation=-90)
             texty_dict[nl]=texty
         #the .draw() here is required to get box locations, so run once then do adds to each box
         ax.get_figure().canvas.draw() 
