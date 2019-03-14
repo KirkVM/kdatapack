@@ -18,7 +18,7 @@ class WellReading:
     experimenter: str = None
     absorbance_wl: int = None #3/5/19---add these as defaults according to dns/bca/etc
     excitation_wl: int = None #3/5/19---add these as defaults according to dns/bca/etc
-    plateid: str = None #reflects whether this measurement is unique to a source vessel
+    plateid: str = None 
 #somehow incorporate batches/freshness?
     '''Settings for reaction/incubation. All about the setup pre-developing''' 
     rxntime: float = None
@@ -26,7 +26,8 @@ class WellReading:
     rxnvessel: str = None
     rxnvesselid: str = None #this will by default get a new uuid.uuid4().hex
     rxnvessel_wellid: str = None #in case different from wellid of reading
-    incubator: str = None
+    rxn_incubator: str = None
+    rxn_rpm: int = None
     rxntemp: float = None
     rxnph: float = None
     rxnvol: float = None
@@ -80,17 +81,27 @@ def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
             "excel df read-in indexing incorrect. Is row/col set correctly?"
     return platedf
 
+def make_plates_rxn_duplicates(plate1,plate2):
+    assert (len(set(plate1.welldict.keys()).difference(plate2.welldict.keys()))==0),\
+        "cannot make entire plate rxn duplicates. don't have same wells"
+    for dfidx in plate2.welldatadf.index:
+        wid=plate2.welldatadf.loc[dfidx].wellid
+        rxnvesselid2keep=plate1.welldict[wid].wellreading.rxnvesselid
+        plate2.welldict[wid].wellreading.rxnvesselid=rxnvesselid2keep #set TecanWell
+        plate2.welldatadf.loc[dfidx,'rxnvesselid']=rxnvesselid2keep #set df also
+
 class TecanWell:
     def __init__(self,well_settings_dict,use_experimenter_defaults=True):
         #can add some error handling here...
         self.well_settings_dict=well_settings_dict
         if use_experimenter_defaults:
             self.set_experimenter_defaults()
+        
         self.wellreading=WellReading(**{x:well_settings_dict[x] for x in well_settings_dict.keys()})
            #now determine what type of WellReading subclass this is based on keys in well_dict
     def set_experimenter_defaults(self):
         #this could be redone with a dictionary much nicer...
-        assert (self.well_settings_dict['experimenter'] in ['KIRK VANDER MEULEN','ERIC HENNEMAN']),\
+        assert (self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']),\
                 f"experimenter {self.well_settings_dict['experimenter']} has no default settings"
         if 'DNS'==self.well_settings_dict['detection'].upper():
             if 'absorbance_wl' not in self.well_settings_dict.keys():
@@ -116,6 +127,11 @@ class TecanWell:
             if 'msrvolume' not in self.well_settings_dict.keys():
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['msrvolume']=90
+        if 'HEIDOLPH'==self.well_settings_dict['rxn_incubator'].upper():
+            self.well_settings_dict['rxn_rpm']=900
+        elif 'THERMOCYCLER'==self.well_settings_dict['rxn_incubator'].upper():
+            self.well_settings_dict['rxn_rpm']=0
+
 
  
 class TecanPlate:
@@ -143,7 +159,7 @@ class TecanPlate:
         self.exceldf=None#df pulled straight from excel sheet
         #go ahead and set up welldatadf here...
         self.welldatadf=None
-    def read_excel_sheet(self,ifpath,shname):
+    def read_excel_sheet(self,ifpath,shname,plate_header_row=23,plate_header_col='A'):
         """
         Reads excel sheet into the class
 
@@ -154,7 +170,8 @@ class TecanPlate:
         Keyword arguments:
             kwargs to pass.... (needs implementation) 
         """
-        self.exceldf=read_tecan_excel(ifpath,shname)
+        self.exceldf=read_tecan_excel(ifpath,shname,plate_header_row=plate_header_row,
+                                        plate_header_col=plate_header_col)
         #automatically create if create_layout has already run through
         if len(self.welldict)>0:
             self.make_welldatadf()
