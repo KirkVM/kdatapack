@@ -61,11 +61,11 @@ class WellReading:
     estock_conc_units: str = None
     e_description_string: str = None
     #standard settings
-    standard_name: str = None
-    standard_conc: float = None
-    standard_conc_units: str = None
-    standard_stock_conc: float = None
-    standard_stock_conc_units: float = None
+    standardname: str = None
+    standardconc: float = None
+    standardconc_units: str = None
+    standardstock_conc: float = None
+    standardstock_conc_units: float = None
     standard_description_string: str = None
 
 def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
@@ -127,13 +127,13 @@ class TecanWell:
             if 'msrvolume' not in self.well_settings_dict.keys():
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['msrvolume']=90
-        if 'HEIDOLPH'==self.well_settings_dict['rxn_incubator'].upper():
-            self.well_settings_dict['rxn_rpm']=900
-        elif 'THERMOCYCLER'==self.well_settings_dict['rxn_incubator'].upper():
-            self.well_settings_dict['rxn_rpm']=0
+        if 'rxn_incubator' in self.well_settings_dict.keys():
+            if 'HEIDOLPH'==self.well_settings_dict['rxn_incubator'].upper():
+                self.well_settings_dict['rxn_rpm']=900
+            elif 'THERMOCYCLER'==self.well_settings_dict['rxn_incubator'].upper():
+                self.well_settings_dict['rxn_rpm']=0
 
 
- 
 class TecanPlate:
     def __init__(self,defaultsdict):
         """
@@ -146,10 +146,6 @@ class TecanPlate:
         Arguments:
         defaultsdict: various fields relevant to WellReadings and subclasses that apply to all wells
         """
-       #wellids=[x+y for x in ['A','B','C','D','E','F','G','H']
-        #     for y in ['1','2','3','4','5','6','7','8','9','10','11','12']]
-        #get all possible fields related to WellReading
-
         #previous...
         self.defaultsdict=defaultsdict
         self.plateid=uuid.uuid4().hex
