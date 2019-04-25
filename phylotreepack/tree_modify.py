@@ -273,43 +273,106 @@ def read_clustertree_fromnewick(treefpath:str):
         lnode.add_feature('accs',[x for x in accnames.strip('|').split('|')])
     return ctree
 
-if __name__=="__main__":
-    local_configfile=open('config.yml','r')
-    defaultsHT=yaml.load(local_configfile)
-    parser=argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--seqfldrpath',default=defaultsHT['seqfldr_basepath'],
-                        help="path to sequence families base directory\n"
-                        "current default=%(default)s")
-    parser.add_argument('--ghfam',default=defaultsHT['ghfam'],
-                        help="gh family (will look for this subfolder)\n"
-                        "current default=%(default)s")
-    parser.add_argument('--ghfamsubfldr',default=defaultsHT['mergefldr'],
-                        help="subfolder within ghfam folder\n"
-                        "current default=%(default)s")
-    parser.add_argument('--treename',default=defaultsHT['filtertree'],
-                        help="name of tree to assist in final selection\n"
-                        "current default=%(default)s")
-    parser.add_argument('--pwid_df',default=defaultsHT['pwid_df'],
-                        help="name of (integer) pwid dataframe\n"
-                        "current default=%(default)s")
-    parser.add_argument('--outgroup',default=defaultsHT['tree_outgroup'],
-                        help="accession code of tree outgroup\n"
-                        "current default=%(default)s")
-    parser.add_argument('--cluster_minpwid',type=int,default=20,
-                        help="int value pwid threshold for cluster\n"
-                        "current default=%(default)s")
-    parser.add_argument('--cluster_minsize',type=int,default=50,
-                        help="int value minimum size of cluster\n"
-                        "current default=%(default)s")
-    parser.add_argument('-f','--force',action='store_true',default=False,
-                        help="overwrite one or both output files\n"
-                        "default=%(default)s")
 
-    args=parser.parse_args()
-    treefpath=os.path.join(args.seqfldrpath,args.ghfam,args.ghfamsubfldr,
-                        args.treename)
-    pwiddf_fpath=os.path.join(args.seqfldrpath,args.ghfam,args.ghfamsubfldr,
-                        args.pwid_df)
-    make_cluster_tree(treefpath,pwiddf_fpath,args.outgroup,
-                            args.cluster_minpwid,args.cluster_minsize)
-                            #force=args.force)
+"""
+def calc_leafweights(t):
+        seqwts_=[]
+        accs_=[]
+        for l in t.get_leaves():
+                curseqname=l.name
+                divisor=1.0
+                seqwt=0.0
+                node=l
+                while not node.is_root():
+                        seqwt+=t.get_distance(node,node.up)/divisor
+                        node=node.up
+                        divisor*=len(node.children)
+                seqwts_.append(seqwt)
+                accs_.append(l.name)
+        #print len(accs_),np.sum(np.array(seqwts_))
+        seqwtsA_=np.array(seqwts_)
+        wtsum=np.sum(seqwtsA_)
+        seqwtsA_*=(len(accs_)/wtsum)
+        wtHT={}
+        for a,w in zip(accs_,seqwtsA_):
+                wtHT[a]=w
+        return wtHT
+
+def calc_treelength(t):
+        #childnodes_=t.children[:] #here's the manual BFS implementation
+        #tlen=0
+        #for cn in childnodes_:
+        #       childnodes_.extend(cn.children)
+        #       tlen+=cn.dist
+        tlen_traverse=0
+        for n in t.traverse():
+                tlen_traverse+=n.dist
+        return tlen_traverse
+
+def bottomup_prune(t,accs_):
+    '''returns a tree pruned to contain only leaves and nodes
+    with names indicated in accs_; also removes parent nodes that dont
+    have any children in that list. deepcopied&pruned tree is returned'''
+    t=deepcopy(t)
+    for node in t.traverse(strategy="postorder"):
+        leafnodes_=node.get_leaves()
+        lnames_=list(map(lambda x:x.name,leafnodes_))
+        lnames_.append(node.name)
+        if len(set(lnames_).intersection(accs_))==0:
+            node.detach()        
+    return t
+
+def topdown_prune(t,accs_):
+    '''returns a tree pruned to contain only leaves and nodes
+    with names indicated in accs_; also removes parent nodes that dont
+    have any children in that list. deepcopied&pruned tree is returned'''
+    t=deepcopy(t)
+    for node in t.traverse(strategy="preorder"):
+        leafnodes_=node.get_leaves()
+        lnames_=list(map(lambda x:x.name,leafnodes_))
+        if len(set(lnames_).intersection(accs_))==0:
+            node.detach()        
+    return t
+
+def bottomup_prunev2(t,accs_):
+    '''returns a tree pruned to contain only leaves and nodes
+    with names indicated in accs_; also removes parent nodes that dont
+    have any children in that list. deepcopied&pruned tree is returned'''
+    t=deepcopy(t)
+    ca=t.get_common_ancestor(accs_)
+    for node in t.traverse(strategy="postorder"):
+        leafnodes_=node.get_leaves()
+        lnames_=list(map(lambda x:x.name,leafnodes_))
+        lnames_.append(node.name)
+        if len(set(lnames_).intersection(accs_))==0:
+#            print(node.get_ancestors())
+            if ca in node.get_ancestors():
+                print('cant prune')
+            #if ca not in node.get_ancestors():
+            else:
+                node.detach()        
+#                print('pruned')
+    return t
+
+def calc_treecoverage(t,accs_):
+        '''calculates tree length covered by a list of leaf nodes'''
+        tlen=0
+        tlen_list=0
+        for n in t.traverse():
+                tlen+=n.dist
+                if n.is_leaf():
+                        #print n.name,accs_
+                        if n.name in accs_:
+                                tlen_list+=n.dist
+                else:
+                        curleafnames_=list(map(lambda x:x.name,n.get_leaves()))
+                        if len(set(accs_).intersection(curleafnames_))>0:
+                                tlen_list+=n.dist
+        return tlen_list/tlen
+
+def calc_treecoverage_v2(t,accs_):
+        tlen=calc_treelength(t)
+        pt=bottomup_prune(t)
+        tlen_list=calc_treecoverage(pt)
+        return tlen_list/tlen
+"""
