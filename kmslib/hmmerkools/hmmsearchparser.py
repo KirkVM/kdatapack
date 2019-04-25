@@ -50,11 +50,12 @@ class DomProfileMatch:
         self.textline=l
 
 class SeqProfileMatch:
-    def __init__(self,accHT,pname,pacc,psize,puv=None):#gi=None,ref=None,gb=None,emb=None):
+    def __init__(self,accHT,pname,pacc,psize,puv=None,paccvrsn=None):#gi=None,ref=None,gb=None,emb=None):
         self.dpms_=[]
         self.accHT=accHT
         self.pname=pname
         self.pacc=pacc
+        self.paccvrsn=paccvrsn
         self.psize=int(psize)
         self.dpm_hdrlines_=None
         if self.accHT is not None:
@@ -98,9 +99,7 @@ class HMMERSearchMotif:
         self.ftrlines_=[]
         self.spms_=[]
         self.readin(acc_mode=acc_mode)
-#        print(self.hdrlines_)
-#        print(self.pname,len(self.spms_))
-#        print(self.ftrlines_)
+
     def readin(self,acc_mode="simple"):
 #        print('reading in')
         accRE=re.compile("([a-z]+)\|([0-9a-zA-Z_\.]+)\|")
@@ -136,7 +135,7 @@ class HMMERSearchMotif:
                     accobj=smpl_accRE.search(smobj.group(9))
                     if accobj:
                         prot_uval=accobj.group(1)
-                        spm=SeqProfileMatch(None,self.pname,self.pacc,self.psize,puv=prot_uval)
+                        spm=SeqProfileMatch(None,self.pname,self.pacc,self.psize,puv=prot_uval,paccvrsn=self.pacc_version)
                         spm.addspmvals(l,smobj.groups()[0:8])
                         self.spms_.append(spm)
                 else:
@@ -145,7 +144,7 @@ class HMMERSearchMotif:
                     if len(accobjs_)>0:
                         for accgrp in accobjs_:
                             accHT[accgrp[0]]=accgrp[1]
-                        spm=SeqProfileMatch(accHT,self.pname,self.pacc,self.psize)
+                        spm=SeqProfileMatch(accHT,self.pname,self.pacc,self.psize,paccvrsn=self.pacc_version)
                         spm.addspmvals(l,smobj.groups()[0:8])
                         self.spms_.append(spm)
             if nhRE.search(l):
@@ -213,41 +212,40 @@ class HMMERSearchMotif:
         return rtext
     
 class HMMERSearchResParser:
+    """Class to hold results from hmmsearch.
+    Assumes option --noali was included
+    """
     def __init__(self):#,nrfpath):
         self.motifresults_=[]
         self.spms_=None
         self.motifHT=None
         self.protHT=None
-    def file_read(self,nrfpath):
-        nrfile=open(nrfpath,'r')
-        prof_ghname=None
-        prof_size=None
-        prof_acc=None
-        qRE=re.compile("Query:\s+(\S+)\s+\[M=(\d+)\].*")
-        paccRE=re.compile("Accession:\s+(\S+)")
-        pls_=[]
-        for x,l in enumerate(nrfile.readlines()):
-            qobj=qRE.match(l)
-            if qobj:
-                prof_ghname=qobj.group(1)
-                prof_size=qobj.group(2)
-                pls_=[l]
-            else:
-                pls_.append(l)
-            paccobj=paccRE.match(l)
-            if paccobj:
-                prof_acc=paccobj.group(1)
-            if l[:2]=='//':
-#                print(prof_ghname,prof_size,prof_acc,len(pls_))
-#                print(pls_)
-                curmotifobj=HMMERSearchMotif(pls_,prof_ghname,prof_size,prof_acc)
-                self.motifresults_.append(curmotifobj)
-                pls_=[]
-                prof_ghname=None
-                prof_size=None
-                prof_acc=None
-#            print(x,l)
-        nrfile.close()
+    def file_read(self,fpath):
+        with open(fpath,'r') as hsfile:
+            prof_ghname=None
+            prof_size=None
+            prof_acc=None
+            qRE=re.compile("Query:\s+(\S+)\s+\[M=(\d+)\].*")
+            paccRE=re.compile("Accession:\s+(\S+)")
+            pls_=[]
+            for x,l in enumerate(hsfile.readlines()):
+                qobj=qRE.match(l)
+                if qobj:
+                    prof_ghname=qobj.group(1)
+                    prof_size=qobj.group(2)
+                    pls_=[l]
+                else:
+                    pls_.append(l)
+                paccobj=paccRE.match(l)
+                if paccobj:
+                    prof_acc=paccobj.group(1)
+                if l[:2]=='//':
+                    curmotifobj=HMMERSearchMotif(pls_,prof_ghname,prof_size,prof_acc)
+                    self.motifresults_.append(curmotifobj)
+                    pls_=[]
+                    prof_ghname=None
+                    prof_size=None
+                    prof_acc=None
 
         for x in range(len(self.motifresults_)-1,-1,-1):
             for y in range(x-1,-1,-1):
@@ -255,7 +253,6 @@ class HMMERSearchResParser:
                     self.motifresults_[y].spms_.extend(self.motifresults_[x].spms_)#.append(spm)
                     self.motifresults_.pop(x)
                     break
-
 
     def get_spm_list(self):
         self.spms_=[]
@@ -275,7 +272,6 @@ class HMMERSearchResParser:
     
     def get_protHT(self):
         self.protHT={}
-        #if self.spms_ is None: 
         self.get_spm_list()
         for spm in self.spms_:
             curp_uval=spm.prot_uval
@@ -292,4 +288,3 @@ class HMMERSearchResParser:
                 motiftext=motifresult.get_text()
                 ofile.write(motiftext)
         ofile.close()
-
