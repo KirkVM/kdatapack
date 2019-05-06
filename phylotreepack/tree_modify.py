@@ -2,6 +2,7 @@ import os,yaml,argparse
 import pandas as pd
 import numpy as np
 from ete3 import Tree
+from copy import deepcopy
 
 def clusterstats(t,pwdf):
     tlength=0.0
@@ -273,6 +274,38 @@ def read_clustertree_fromnewick(treefpath:str):
         lnode.add_feature('accs',[x for x in accnames.strip('|').split('|')])
     return ctree
 
+#def bottomup_prune(t,lnames):
+#    '''returns a tree pruned to contain only leaves
+#    with names indicated in lnames; also removes parent nodes that dont
+#    have any children in that list. deepcopied&pruned tree is returned'''
+#    t=deepcopy(t)
+#    t.resolve_polytomy()
+#    #ca=t.get_common_ancestor([t&lname for lname in lnames]) #ancestor common to all we want to keep
+#    for node in t.traverse(strategy="postorder"):
+#        lkeepnames=list(set(lnames).intersection(node.get_leaf_names()))
+#        if len(lkeepnames)==0:
+#            #if ca in node.get_ancestors():
+#            #    print('cant prune')
+#            #else:
+#            node.detach()        
+#    #now do a bottom up and delete all nodes with #descendants>2*num_leaves-1
+#    for l in t.get_leaves():
+#        pnode=l.up
+#        while(pnode!=t):
+#            print(len(pnode.get_descendants()))
+##            print(len(pnode.get_descendants()))
+#            if (len(pnode.get_descendants())) >= 2*len(pnode.get_leaves())-1:
+#                print(f'deleting {pnode.name}')
+#                dnode=pnode
+#                pnode=pnode.up
+#                dnode.delete()
+#            else:
+#                pnode=pnode.up
+##            pnode=pnode.up
+#
+#        break
+#    return t
+
 
 """
 def calc_leafweights(t):
@@ -333,27 +366,6 @@ def topdown_prune(t,accs_):
         if len(set(lnames_).intersection(accs_))==0:
             node.detach()        
     return t
-
-def bottomup_prunev2(t,accs_):
-    '''returns a tree pruned to contain only leaves and nodes
-    with names indicated in accs_; also removes parent nodes that dont
-    have any children in that list. deepcopied&pruned tree is returned'''
-    t=deepcopy(t)
-    ca=t.get_common_ancestor(accs_)
-    for node in t.traverse(strategy="postorder"):
-        leafnodes_=node.get_leaves()
-        lnames_=list(map(lambda x:x.name,leafnodes_))
-        lnames_.append(node.name)
-        if len(set(lnames_).intersection(accs_))==0:
-#            print(node.get_ancestors())
-            if ca in node.get_ancestors():
-                print('cant prune')
-            #if ca not in node.get_ancestors():
-            else:
-                node.detach()        
-#                print('pruned')
-    return t
-
 def calc_treecoverage(t,accs_):
         '''calculates tree length covered by a list of leaf nodes'''
         tlen=0
