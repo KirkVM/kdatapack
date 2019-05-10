@@ -320,7 +320,7 @@ class EteMplTree:
             fig_leafspacing=converter[1]
         elif orientation in ['top','bottom']:
             fig_leafspacing=converter[0]
-#        self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
+        self.add_cluster_visualization(ax,orientation,leafspacing,fig_leafspacing)
         if draw_leaf_names:
             self.draw_lnames(ax,orientation,leafspacing,create_leaf_names,fig_leafspacing)
         if self.dashed_leaves:
