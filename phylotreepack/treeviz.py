@@ -143,6 +143,20 @@ class FigureCoordBox:
     def copy(self):
         return FigureCoordBox(self.xmin,self.xmax,self.ymin,self.ymax)
 
+
+class TNodeGlyph:
+    def __init__(self,glyph):
+        self.boundbox=None
+
+class TNode:
+    def __init__(self,etenode):
+        self.etenode=etenode
+        self.stemline=None
+        self.baseline=None
+        self.glyphs=None
+        self.branchbox=None
+        self.alignbox=None
+
 class NodeLayout:
     def __init__(self,ax=None,steml2d:mpl.lines.Line2D=None,basel2d:mpl.lines.Line2D=None,
                       orientation:str=None,leafspacing:float=None):
@@ -201,7 +215,7 @@ class NodeLayout:
         return FigureCoordBox(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)
 
 
-class EteMplTree:
+class PhyloTree:
     """Class for plotting an ete3 tree using matplotlib rendering
 
     Attributes:
@@ -214,7 +228,7 @@ class EteMplTree:
         plot_coords: [xmin,xmax],[ymin,ymax] values for graph
                         (calculated through calling .render() method)
     """
-    def __init__(self,tree:Tree,cluster_feature='accs'):
+    def __init__(self,tree:Tree):#,cluster_feature='accs'):
         """ constructor for EteMplTree.
         Calls: self.cluster_size() to add feature .cluster_relsize to each leaf node
 
@@ -352,6 +366,7 @@ class EteMplTree:
         texty_dict={}
         for lnode in self.tree.get_leaves():
             nl=lnode.node_layout
+            nl.add
             #if orientation in ['left','right']:
             bbox_props=dict(boxstyle='square',fc='white',lw=0,alpha=0)
             #    texty=ax.text(nl.nextbranch_x,nl.nextbranch_y,lnode.name,bbox=bbox_props,\
@@ -370,6 +385,7 @@ class EteMplTree:
         inverter=ax.transData.inverted()
         if self.cluster_feature=='accs':
             for node in self.tree.get_leaves():
+
                 nl=node.node_layout
                 cmarker=ax.plot(nl.nextbranch_x,nl.nextbranch_y,\
                     marker=align_marker(self.cviz_symboldict[orientation],halign=self.cviz_hadict[orientation],\
