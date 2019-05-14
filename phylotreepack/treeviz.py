@@ -3,11 +3,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Iterable
-from ete3 import Tree
 from matplotlib import markers
 from matplotlib.path import Path
 from operator import attrgetter
-from dataclasses import dataclass
 #from functools import reduce
 #from itertools import product
 
@@ -78,24 +76,6 @@ def align_marker(marker, halign='center', valign='middle',):
     return Path(m_arr, bm.get_path().codes)
 
 
-def depth_sort(trees):
-    """sorts trees according to ranked criteria: 1.#nodes to deepest leaf, 2.dist. to deepest leaf
-
-    Arguments:
-        [ete trees] 
-    Returns:
-        [sorted ete trees], shortest first"""
-    dtzips=[]
-    for t in trees:
-        leaves=t.get_leaves()
-        max_depth=max([len(l.get_ancestors()) for l in leaves])
-        max_dist=max([t.get_distance(l) for l in leaves])
-        dtzips.append([max_depth,max_dist,t])
-#    print(dtzips)
-    dtzips.sort(key=lambda x:x[1])#,reverse=True)
-    sorted_trees=[x[2] for x in dtzips]#.sort(key=lambda x:x[0])]
-    return sorted_trees
-
 def ete_set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     """Function called by EteMplTree to determine how to plot tree. 
     Recursively calls, determining 'stem_coord_offset' for leaves (equivalent to y-value 
@@ -133,29 +113,6 @@ def ete_set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     return ycoord_ascend,ycoord_descend
 #from matplotlib.axes import Axes
 #from matplotlib.transforms import IdentityTransform
-
-@dataclass(repr=True)
-class FigureCoordBox:
-    xmin:float=None
-    xmax:float=None
-    ymin:float=None
-    ymax:float=None
-    def copy(self):
-        return FigureCoordBox(self.xmin,self.xmax,self.ymin,self.ymax)
-
-
-class TNodeGlyph:
-    def __init__(self,glyph):
-        self.boundbox=None
-
-class TNode:
-    def __init__(self,etenode):
-        self.etenode=etenode
-        self.stemline=None
-        self.baseline=None
-        self.glyphs=None
-        self.branchbox=None
-        self.alignbox=None
 
 class NodeLayout:
     def __init__(self,ax=None,steml2d:mpl.lines.Line2D=None,basel2d:mpl.lines.Line2D=None,
@@ -215,43 +172,6 @@ class NodeLayout:
         return FigureCoordBox(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)
 
 
-class PhyloTree:
-    """Class for plotting an ete3 tree using matplotlib rendering
-
-    Attributes:
-        orientation ('left','right','top','bottom'): tree orientation (str, default 'left')
-        dashed_leaves: whether to add dashes from leaves to edge of graph (default True)
-        cluster_feature: ete node feature to use to define cluster size (str, default 'accs')
-        cluster_viz: symbol to use as cluster indicator (default 'triangle')---not yet impld
-        ordered_leaves: list of leaves from graph start (in ladderized form) to end
-                        (calculated through calling .render() method)
-        plot_coords: [xmin,xmax],[ymin,ymax] values for graph
-                        (calculated through calling .render() method)
-    """
-    def __init__(self,tree:Tree):#,cluster_feature='accs'):
-        """ constructor for EteMplTree.
-        Calls: self.cluster_size() to add feature .cluster_relsize to each leaf node
-
-        Arguments:
-            tree: an ete3 tree instance
-            [Also currently makes some assumed settings that are configurable public properties-
-            -orientation,cluster_feature,cluster_viz,scale]
-        
-        Keyword Arguments:
-            cluster_feature: what feature to use as indication of cluster size: None, 'accs' (default='accs')
-        """
-
-        self.tree=tree.copy()
-        self.orientation='left'
-        self.scale=1.0
-        self.dashed_leaves=True
-        self.cluster_viz='triangle'
-        self.cviz_symboldict={'left':'<','right':'>','top':'^','bottom':'v'}
-        self.cviz_hadict={'left':'left','right':'right','top':'center','bottom':'center'}
-        self.cviz_vadict={'left':'center','right':'center','top':'top','bottom':'bottom'}
-        self.tree_lw=3.0
-        self.tree_color='black'
-        self.initial_leafspacing=0.1
         self.create_leaf_names=False
         self.draw_leaf_names=False
         
