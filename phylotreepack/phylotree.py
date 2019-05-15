@@ -1,7 +1,13 @@
-import dask
+#import dask
 from ete3 import Tree
 from dataclasses import dataclass
 import numpy as np
+
+from matplotlib.path import Path
+import matplotlib.patches as patches
+
+from bokeh.models import ColumnDataSource
+from bokeh.models.glyphs import Line
 
 def depth_sort(trees):
     """sorts trees according to ranked criteria: 1.#nodes to deepest leaf, 2.dist. to deepest leaf
@@ -16,7 +22,6 @@ def depth_sort(trees):
         max_depth=max([len(l.get_ancestors()) for l in leaves])
         max_dist=max([t.get_distance(l) for l in leaves])
         dtzips.append([max_depth,max_dist,t])
-#    print(dtzips)
     dtzips.sort(key=lambda x:x[1])#,reverse=True)
     sorted_trees=[x[2] for x in dtzips]#.sort(key=lambda x:x[0])]
     return sorted_trees
@@ -36,7 +41,26 @@ class FrameCoords:
     stem_end:(float,float)=(None,None)
     base_start:(float,float)=(None,None)
     base_end:(float,float)=(None,None)
-    orientation:str='left'
+    def get_framepath(self,orientation='left'):
+        codes=[]
+        verts=[]
+        framepath=None
+        if self.stem_start is not None:
+            verts.extend([self.stem_start,self.stem_end])
+            codes.extend([Path.MOVETO,Path.LINETO])
+        if self.base_start is not None:
+            verts.extend([self.base_start,self.base_end])
+            codes.extend([Path.MOVETO,Path.LINETO])
+        framepath=Path(verts,codes)
+        return framepath
+    def get_cds(self,orientation='left'):
+        ldict={}
+        if self.stem_start is not None:
+            ldict['x']=[self.stem_start[0],self.stem_end[0]]
+            ldict['y']=[self.stem_start[1],self.stem_end[1]]
+        return ColumnDataSource(ldict)
+
+
 
 def set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     """Function called by EteMplTree to determine how to plot tree. 
@@ -66,17 +90,20 @@ def set_branch_coordinates(branch,xcoord,ycoord,sepsize):
         ycoord_ascend,ycoord_descend=set_branch_coordinates(sub_branch,xcoord,ycoord,sepsize)
         ycoord=ycoord_descend
         ycoord_ascends.append(ycoord_ascend)
-
+    #import pdb;pdb.set_trace()
     branch.framecoords=FrameCoords(stem_start=(xcoord-branch.dist,np.mean(ycoord_ascends)),
                                    stem_end=(xcoord,np.mean(ycoord_ascends)),
                                     base_start=(xcoord,min(ycoord_ascends)),
                                     base_end=(xcoord,max(ycoord_ascends)))
+    
     return np.mean(ycoord_ascends),ycoord_descend
 
 
 class PTNodeGlyph:
     def __init__(self,glyph):
         self.boundbox=None
+
+
 
 class PhyloTree:
     def __init__(self,etenode,depth=0):
@@ -88,6 +115,7 @@ class PhyloTree:
         self.dist=etenode.dist
         self.etenode.add_feature('ptnode',self)
         self.framecoords=None
+        self.framepath=None
         self.glyphs=None
         self.branchbox=None
         self.alignbox=None
@@ -101,15 +129,36 @@ class PhyloTree:
     def get_leaves(self):
         eteleaves=self.etenode.get_leaves()
         return [eteleaf.ptnode for eteleaf in eteleaves]
-    def draw(self,sepsize=0.1,ax=None):
+    def mpldraw(self,sepsize=0.1,ax=None):
         set_branch_coordinates(self,0,0,sepsize)
-#        drawtasks=[]
+        pcoords=[]
         for etenode in self.etenode.traverse():
             ptn=etenode.ptnode
-#            xs=[ptn.framecoords.stem_start[0],ptn.framecoords.stem_end[0]]
-#            ys=[ptn.framecoords.stem_start[1],ptn.framecoords.stem_end[1]] 
-#            drawtasks.append(dask.delayed(ax.plot,pure=True)(xs,ys))
-            ax.plot([ptn.framecoords.stem_start[0],ptn.framecoords.stem_end[0]],[ptn.framecoords.stem_start[1],ptn.framecoords.stem_end[1]]) 
+            patch=patches.PathPatch(ptn.framecoords.get_framepath())#,facecolor='black',edgecolor='black')
+            ax.add_patch(patch)
+            verts=ptn.framepath.vertices
+            pcoords.append([min([x[0] for x in verts]),max([x[0] for x in verts]), min([x[1] for x in verts]),max([x[1] for x in verts])])
+
+        xmin=min(x[0] for x in pcoords)
+        xmax=max(x[1] for x in pcoords)
+        ymin=min(x[2] for x in pcoords)
+        ymax=max(x[3] for x in pcoords)
+        ax.set_ylim((ymin,ymax))
+        ax.set_xlim((xmin,xmax))
+
+    def bokehdraw(self,sepsize=0.2,plot=None):
+        set_branch_coordinates(self,0,0,sepsize)
+        for etenode in self.etenode.traverse():
+            ptn=etenode.ptnode
+            cds=ptn.framecoords.get_cds()
+            glyph=Line(x='x',y='y')
+            plot.add_glyph(cds,glyph)
+#            cds=ColumnDataSource(dict(x=))
+
+
+#
+#                
+#                [ptn.framecoords.stem_start[0],ptn.framecoords.stem_end[0]],[ptn.framecoords.stem_start[1],ptn.framecoords.stem_end[1]]) 
 #        dask.compute(drawtasks)
 
 #class PhyloTree:
