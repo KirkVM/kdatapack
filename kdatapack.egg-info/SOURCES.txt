@@ -18,4 +18,5 @@ proteinseqpack/aligner.py
 proteinseqpack/pseqgroup.py
 tecanpack/__init__.py
 tecanpack/activity_calcs.py
+tecanpack/read_tecan.py
 tecanpack/tecanio.py
