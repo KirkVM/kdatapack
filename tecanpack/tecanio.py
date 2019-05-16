@@ -155,6 +155,8 @@ class TecanPlate:
         self.exceldf=None#df pulled straight from excel sheet
         #go ahead and set up welldatadf here...
         self.welldatadf=None
+        self.ifpath=None
+        self.expsheet=None
     def read_excel_sheet(self,ifpath,shname,plate_header_row=23,plate_header_col='A'):
         """
         Reads excel sheet into the class
@@ -166,6 +168,8 @@ class TecanPlate:
         Keyword arguments:
             kwargs to pass.... (needs implementation) 
         """
+        self.ifpath=ifpath
+        self.expsheet=shname
         self.exceldf=read_tecan_excel(ifpath,shname,plate_header_row=plate_header_row,
                                         plate_header_col=plate_header_col)
         #automatically create if create_layout has already run through

@@ -1,8 +1,9 @@
-import sqlite3,atexit
+import sqlite3,atexit,pickle
 import yaml,os,uuid,datetime
 from pathlib import Path
 import importlib.util
 import pandas as pd
+from . import tecanio
 
 def determinepath(curpath,cfdict):
     if cfdict['filepath_prefix_type']=='relative':
@@ -24,8 +25,8 @@ def read_load_confile(cfpathstr,refresh_all):
     logdbpath=determinepath(cfdir,logdb_dict)
 #    ldbname=logdb_dict['dbname']
     
-    pkldf_dict=configgy['pkldfs']
-    pkldf_fldrpath=determinepath(cfdir,pkldf_dict)
+    pkl_dict=configgy['pklplates']
+    pkl_fldrpath=determinepath(cfdir,pkl_dict)
 
     load_scripts=[]
     for ldentry in configgy['load_scripts']:
@@ -41,55 +42,58 @@ def read_load_confile(cfpathstr,refresh_all):
 
     if refresh_all:
         c.execute('''DROP TABLE PLATES''')
-        for pkldf in os.listdir(pkldf_fldrpath):
-            os.remove(os.path.join(pkldf_fldrpath,pkldf))
-    c.execute('''CREATE TABLE IF NOT EXISTS PLATES (plateid text, filename text, sheetname text,
-                expdate text, experimenter text, scriptname text, pkl_ctime text, pkldfname text, pklplate glob)''')
+        c.execute('''DROP TABLE LSCRIPTS''')
+        for pklf in os.listdir(pkl_fldrpath):
+            os.remove(os.path.join(pkl_fldrpath,pklf))
+    c.execute('''CREATE TABLE IF NOT EXISTS PLATES (plateid text, filename text, sheetname text,scriptname text, pklplate glob)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS LSCRIPTS (scriptname text, pkl_ctime text, pklfname text)''')
 
-    dfs=[]
+    outplates=[]
     for ls in load_scripts:
         load_required=False
         lsentry=str(ls[0].name)+':'+ls[1]
-        seltuple=(lsentry,)
         try:
-            c.execute('''SELECT * FROM lscripts WHERE scriptname=?''',seltuple)
+            c.execute('''SELECT * FROM LSCRIPTS WHERE scriptname=(?)''',(lsentry,))
             prev_entry=c.fetchone()
-            prev_name=prev_entry['scriptname']
             prev_load_time=prev_entry['pkl_ctime']
-            prev_pklname=prev_entry['pkldfname']
-            prev_picklepath=pkldf_fldrpath / prev_pklname
+            prev_pklfname=prev_entry['pklfname']
+            prev_picklefpath=pkl_fldrpath / prev_pklfname
             #compare create time with load_script's mod time
             ls_mtime=os.path.getmtime(ls[0])
             if ls_mtime>float(prev_load_time):
                 load_required=True
+                c.execute('''DELETE FROM LSCRIPTS WHERE scriptname=(?)''',(lsentry,))
+                c.execute('''DELETE FROM PLATES WHERE scriptname=(?)''',(lsentry,))
+                os.remove(prev_picklefpath)
+                #os.remove(prev_platepath???)
         except:
-            print(f'reloading df using {lsentry}')
+            print(f'reloading plates using {lsentry}')
             load_required=True
         if load_required:
             spec=importlib.util.spec_from_file_location(str(ls[0]),ls[0])#'kdfs/dload_dir/load_scripts/testscript.py','kdfs/dload_dir/load_scripts/testscript.py')#
             themodule=importlib.util.module_from_spec(spec)
             spec.loader.exec_module(themodule)
             m2c=getattr(themodule,ls[1])
-            curdf=m2c()
-            pklname=f'pkldf-{uuid.uuid4().hex}'
-            pklpath=pkldf_fldrpath / pklname
-            curdf.to_pickle(pklpath)
-            curdftime=os.path.getmtime(pklpath)
-            intuple=(lsentry,curdftime,pklname)
-            c.execute('''INSERT INTO lscripts VALUES (?,?,?)''',intuple)
-        else:
-         #   curdf=pd.module_from_spec
-            curdf=pd.read_pickle(prev_picklepath)
-        dfs.append(curdf)
-
-
-#    edf=pd.concat([dns_std_df,bca_std_df,df0305dns,df0305bca],ignore_index=True)
-            #c.execute('''CREATE)
-            #print(curdf.shape)
-    conn.commit()
+            plates=m2c()
+            for plate in plates:
+                newtuple=(plate.plateid,plate.ifpath.name,plate.expsheet,lsentry,pickle.dumps(plate))
+                c.execute('''INSERT INTO PLATES VALUES (?,?,?,?,?)''',newtuple)
+            pklfname=f'pltscached-{uuid.uuid4().hex}'
+            pklpath=pkl_fldrpath / pklfname
+            with open(pklpath,'wb') as f:
+                pickle.dump(plates,f)
+            curlstime=os.path.getmtime(pklpath)
+            newlstuple=(lsentry,curlstime,pklfname)
+            c.execute('''INSERT INTO LSCRIPTS VALUES (?,?,?)''',newtuple)
+        conn.commit()
+        #now read in the plates--
+        c.execute('''SELECT * FROM LSCRIPTS WHERE scriptname=(?)''',(lsentry,))
+        lsrow=c.fetchone()
+        picklefpath=pkl_fldrpath / lsrow['pklfname']
+        outplates.extend(pickle.load(open(picklefpath,'rb')))
     conn.close()
-    return dfs
- 
+    return outplates
+
 
 def load_tecandata(cfpathstr,refresh_all=False):
     '''reads excel files using load scripts/functions as specified in a config file
