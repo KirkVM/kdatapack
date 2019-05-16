@@ -2,6 +2,22 @@ import datetime,itertools,re,uuid
 import pandas as pd
 import dataclasses
 from dataclasses import dataclass
+from bokeh.plotting import figure,show,reset_output,ColumnDataSource
+from bokeh.models.glyphs import Text
+from bokeh.models import FixedTicker,HoverTool,Range1d
+
+class TecanSet:
+    def __init__(self,plates):
+        self.plates=plates
+    def get_df(self):
+        return pd.concat([x.welldatadf for x in self.plates],ignore_index=True)
+    def get_plate(self,plateid=None):
+        for plate in self.plates:
+            if plate.plateid==plateid:
+                rplate=plate
+                break
+        return rplate    
+
 
 @dataclass
 class WellReading:
@@ -267,3 +283,75 @@ class TecanPlate:
             xlval=self.exceldf[int(colstr)].at[rowstr]
             self.welldict[rowstr+colstr].measurement=xlval
             self.welldatadf['measurement'].at[dfidx]=xlval#self.welldatadf.append(newdf,ignore_index=True,sort=False)
+    def view_plate(self):
+        reset_output()
+        hover_tool=HoverTool(names=['stuff'],tooltips=[('Well','@wellid'),('Enzyme','@enzyme'),('Substrate','@substrate'),('Standard','@standard')]
+                    )
+        pscale=90
+        p=figure(plot_width=12*pscale,plot_height=8*pscale,tools=[hover_tool])
+        rows=['A','B','C','D','E','F','G','H']
+        cols=[1,2,3,4,5,6,7,8,9,10,11,12]
+        ecpairs=[]
+        for rnum,rname in enumerate(rows):
+            for cnum,cname in enumerate(cols):
+                curwell=f'{rname}{cname}'
+                xpos0,xpos1=cnum*pscale,(cnum+1)*pscale
+                ypos0,ypos1=(8-rnum)*pscale,(8-rnum+1)*pscale
+                if curwell in self.welldatadf.wellid.values:
+                    welldf=self.welldatadf[self.welldatadf.wellid==curwell]
+                    cds=get_plthovers(welldf)
+                    ecpair=(welldf.ename.values[0],welldf.sname.values[0])
+                    if welldf.ename.values[0] is not None and welldf.sname.values[0] is not None:
+                        rcolor='purple'
+                    elif welldf.ename.values[0] is not None:# and welldf.sname.values[0] is not None:
+                        rcolor='blue'
+                    elif welldf.sname.values[0] is not None:# and welldf.sname.values[0] is not None:
+                        rcolor='red'
+                    elif welldf.standardname.values[0] is not None:
+                        rcolor='yellow'
+                    if ecpair not in ecpairs:
+                        ecpairs.append(ecpair)
+                    ecidx=ecpairs.index(ecpair)+1
+                    ecidxcds=ColumnDataSource(data={'ecidx':[str(ecidx)]})
+                    gt=Text(x=xpos0-0.3*pscale,y=ypos0+0.05*pscale,text='ecidx')
+                    p.add_glyph(ecidxcds,gt)#x=xpos0-pscale*0.05,y=ypos0-0.05,text=str(ecidx))
+                    p.rect(x=xpos0-pscale*0.05,y=ypos0-0.05*pscale,color=rcolor,width=0.9*pscale,height=0.9*pscale,alpha=0.1,name='stuff',source=cds)#  rnum*100,width=100,y=cnum*100,width=100
+                else:
+                    p.rect(x=xpos0-pscale*0.05,y=ypos0-0.05*pscale,width=0.9*pscale,height=0.9*pscale,alpha=0,line_width=1,line_alpha=1,line_color='gray')#  rnum*100,width=100,y=cnum*100,width=100
+        p.grid.grid_line_width=0
+        p.xaxis.axis_line_width=0
+        p.yaxis.axis_line_width=0
+        xaxis_ticks_tuple=[(int(pscale*x),cols[x]) for x in range(len(cols))]
+        p.xaxis.ticker=FixedTicker(ticks=[x[0] for x in xaxis_ticks_tuple])
+        p.xaxis.major_label_overrides={x:str(y) for x,y in xaxis_ticks_tuple }
+        p.xaxis.major_tick_in=0
+        p.xaxis.major_tick_out=0
+        p.xaxis.major_label_text_font_size=f'{int(14*pscale/100)}pt'
+
+        yaxis_ticks_tuple=[(int(pscale*(8-x)),rows[x]) for x in range(len(rows))]
+        p.yaxis.ticker=FixedTicker(ticks=[x[0] for x in yaxis_ticks_tuple])
+        p.yaxis.major_label_overrides={x:str(y) for x,y in yaxis_ticks_tuple }
+        p.yaxis.major_tick_in=0
+        p.yaxis.major_tick_out=0
+        p.yaxis.major_label_text_font_size=f'{int(16*pscale/100)}pt'
+        #p.yaxis.major_label_standoff=int(-30*pscale/100)#-20#f'{int(14*pscale/100)}pt'
+        p.y_range=Range1d(0.4*pscale,pscale*(9-0.4))
+        p.x_range=Range1d(-(0.6*pscale),pscale*(12-0.4))
+        return p
+
+def get_plthovers(welldfrow):
+    cdict={}
+    cdict['wellid']=welldfrow['wellid']
+    if welldfrow.ename is not None:
+        cdict['enzyme']=[f'{welldfrow["ename"].values[0]}: {welldfrow["econc"].values[0]} {welldfrow["econc_units"].values[0]}']
+    else:
+        cdict['enzyme']=['none']
+    if welldfrow.sname is not None:
+        cdict['substrate']=[f'{welldfrow["sname"].values[0]}: {welldfrow["sconc"].values[0]} {welldfrow["sconc_units"].values[0]}']
+    else:
+        cdict['substrate']=['none']
+    if welldfrow.standardname.values[0] is not None:
+        cdict['standard']=[f'{welldfrow["standardname"].values[0]}: {welldfrow["standardconc"].values[0]} {welldfrow["standardconc_units"].values[0]}']
+    else:
+        cdict['standard']=['none']
+    return ColumnDataSource(data=cdict)
