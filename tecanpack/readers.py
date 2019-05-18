@@ -35,6 +35,8 @@ def read_load_confile(cfpathstr,refresh_all):
         lspath=determinepath(cfdir,load_dict)
         ls_funcname=load_dict['funcname']
         load_scripts.append([lspath,ls_funcname])
+    #print(lspath)
+    #importlib.import_module(lspath.name)
 
     conn=sqlite3.connect(logdbpath)
     atexit.register(conn.close)
@@ -47,6 +49,7 @@ def read_load_confile(cfpathstr,refresh_all):
         if pkl_fldrpath.exists():
             for pklf in os.listdir(pkl_fldrpath):
                 os.remove(os.path.join(pkl_fldrpath,pklf))
+        print('**reloading all files**')
     c.execute('''CREATE TABLE IF NOT EXISTS PLATES (plateid text, filename text, sheetname text,scriptname text, pklplate glob)''')
     c.execute('''CREATE TABLE IF NOT EXISTS LSCRIPTS (scriptname text, pkl_ctime text, pklfname text)''')
 
@@ -67,9 +70,10 @@ def read_load_confile(cfpathstr,refresh_all):
                 c.execute('''DELETE FROM LSCRIPTS WHERE scriptname=(?)''',(lsentry,))
                 c.execute('''DELETE FROM PLATES WHERE scriptname=(?)''',(lsentry,))
                 os.remove(prev_picklefpath)
+                print(f'reloading plates using {lsentry} due to loadscript update')
                 #os.remove(prev_platepath???)
         except:
-            print(f'reloading plates using {lsentry}')
+            print(f'loading plates from file using {lsentry} (no existing cache)')
             load_required=True
 #            conn.close()
         if load_required:

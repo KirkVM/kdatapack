@@ -7,11 +7,25 @@ from bokeh.models.glyphs import Text
 from bokeh.models import FixedTicker,HoverTool,Range1d
 
 class TecanSet:
+    '''Utility class returned by load_tecandata. list of plates (.plates) is only property
+
+    Methods:
+        get_df(): returns merged dataframe
+        get_plate(): returns a particular plate (typical use is diagnosing a problem with loadscript)
+    '''
     def __init__(self,plates):
+        '''TecanSet constructor, requires list of plates''' 
         self.plates=plates
     def get_df(self):
+        '''returns pandas dataframe for all included plates'''
         return pd.concat([x.welldatadf for x in self.plates],ignore_index=True)
     def get_plate(self,plateid=None):
+        '''returns a single plate from TecanSet
+        
+        Keyword arguments:
+        plateid: plateid value associated with plate of interest 
+                (this is currently a required keyword argument)
+        '''
         for plate in self.plates:
             if plate.plateid==plateid:
                 rplate=plate
@@ -97,7 +111,7 @@ def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
             "excel df read-in indexing incorrect. Is row/col set correctly?"
     return platedf
 
-def make_plates_rxn_duplicates(plate1,plate2):
+def make_plates_rxn_duplicates(plate1,plate2,allow_subplate=False):
     '''Set a plate's rxnvesselid values to those of previous plate
     Iterates over new plate (plate2) and copies from previous based on wellid
     
@@ -105,8 +119,12 @@ def make_plates_rxn_duplicates(plate1,plate2):
     plate1: existing plate to copy rxnvesselid values from
     plate2: plate that has been added
     '''
-    assert (len(set(plate1.welldict.keys()).difference(plate2.welldict.keys()))==0),\
-        "cannot make entire plate rxn duplicates. don't have same wells"
+    if allow_subplate==False:
+        assert (len(set(plate1.welldict.keys()).difference(plate2.welldict.keys()))==0),\
+             "cannot make entire plate rxn duplicates. don't have same wells"
+    else:
+        assert (len(set(plate2.welldict.keys()).difference(plate1.welldict.keys()))==0),\
+             "cannot make entire plate rxn duplicates. don't have same wells"
     for dfidx in plate2.welldatadf.index:
         wid=plate2.welldatadf.loc[dfidx].wellid
         rxnvesselid2keep=plate1.welldict[wid].wellreading.rxnvesselid
@@ -130,11 +148,11 @@ class TecanWell:
             if 'absorbance_wl' not in self.well_settings_dict.keys():
                 self.well_settings_dict['absorbance_wl']=540
             if 'predvlp_dlnfactor' not in self.well_settings_dict.keys():
-                print('CAREFUL-- using experimenter defaults for predvlp_dlnfactor')
+                #print('CAREFUL-- using experimenter defaults for predvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['predvlp_dlnfactor']=1/3
             if 'postdvlp_dlnfactor' not in self.well_settings_dict.keys():
-                print('CAREFUL-- using experimenter defaults for postdvlp_dlnfactor')
+                #print('CAREFUL-- using experimenter defaults for postdvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['postdvlp_dlnfactor']=36/196
             if 'msrvolume' not in self.well_settings_dict.keys():
@@ -144,11 +162,11 @@ class TecanWell:
             if 'absorbance_wl' not in self.well_settings_dict.keys():
                 self.well_settings_dict['absorbance_wl']=562
             if 'predvlp_dlnfactor' not in self.well_settings_dict.keys():
-                print('CAREFUL-- using experimenter defaults for predvlp_dlnfactor')
+                #print('CAREFUL-- using experimenter defaults for predvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['predvlp_dlnfactor']=5/105
             if 'postdvlp_dlnfactor' not in self.well_settings_dict.keys():
-                print('CAREFUL-- using experimenter defaults for postdvlp_dlnfactor')
+                #print('CAREFUL-- using experimenter defaults for postdvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['postdvlp_dlnfactor']=1
             if 'msrvolume' not in self.well_settings_dict.keys():
