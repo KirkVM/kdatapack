@@ -98,6 +98,13 @@ def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
     return platedf
 
 def make_plates_rxn_duplicates(plate1,plate2):
+    '''Set a plate's rxnvesselid values to those of previous plate
+    Iterates over new plate (plate2) and copies from previous based on wellid
+    
+    Arguments:
+    plate1: existing plate to copy rxnvesselid values from
+    plate2: plate that has been added
+    '''
     assert (len(set(plate1.welldict.keys()).difference(plate2.welldict.keys()))==0),\
         "cannot make entire plate rxn duplicates. don't have same wells"
     for dfidx in plate2.welldatadf.index:
@@ -123,9 +130,11 @@ class TecanWell:
             if 'absorbance_wl' not in self.well_settings_dict.keys():
                 self.well_settings_dict['absorbance_wl']=540
             if 'predvlp_dlnfactor' not in self.well_settings_dict.keys():
+                print('CAREFUL-- using experimenter defaults for predvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['predvlp_dlnfactor']=1/3
             if 'postdvlp_dlnfactor' not in self.well_settings_dict.keys():
+                print('CAREFUL-- using experimenter defaults for postdvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['postdvlp_dlnfactor']=36/196
             if 'msrvolume' not in self.well_settings_dict.keys():
@@ -135,9 +144,11 @@ class TecanWell:
             if 'absorbance_wl' not in self.well_settings_dict.keys():
                 self.well_settings_dict['absorbance_wl']=562
             if 'predvlp_dlnfactor' not in self.well_settings_dict.keys():
+                print('CAREFUL-- using experimenter defaults for predvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['predvlp_dlnfactor']=5/105
             if 'postdvlp_dlnfactor' not in self.well_settings_dict.keys():
+                print('CAREFUL-- using experimenter defaults for postdvlp_dlnfactor')
                 if self.well_settings_dict['experimenter'].upper() in ['KIRK VANDER MEULEN','ERIC HENNEMAN']:
                     self.well_settings_dict['postdvlp_dlnfactor']=1
             if 'msrvolume' not in self.well_settings_dict.keys():
