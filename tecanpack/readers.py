@@ -6,6 +6,8 @@ import pandas as pd
 from . import tecanio
 from .tecanio import TecanSet
 
+#calls to 'determinepath' require current running path...
+#for now, using hack/shortcut that current path is same location as the config files
 def determinepath(curpath,cfdict):
     if cfdict['filepath_prefix_type']=='relative':
         thepath=curpath
@@ -16,7 +18,15 @@ def determinepath(curpath,cfdict):
     thepath= thepath / Path(cfdict['filepath_ending'])
     return thepath
 
-def read_load_confile(cfpathstr,refresh_all):
+def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
+    '''Loads plates using a yaml settings file
+
+    Arguments:
+        cfpathstr: path to load_scripts yaml settings file
+        settingsfpathstr: path to yaml file containing information about datadirectory for a user
+        username: name to refer to in settingsfpathstr
+        refresh_all: whether to delete all cached (pickled) plates & tables in DB and start over
+    '''
     cfp=Path(cfpathstr)
     cfdir=cfp.parent
     with open(cfp,'r') as f:
@@ -24,10 +34,20 @@ def read_load_confile(cfpathstr,refresh_all):
     #logdb first:
     logdb_dict=configgy['logdb']
     logdbpath=determinepath(cfdir,logdb_dict)
-#    ldbname=logdb_dict['dbname']
     
     pkl_dict=configgy['pklplates']
     pkl_fldrpath=determinepath(cfdir,pkl_dict)
+
+    #now get user/device settings from settingsfpath
+    sfp=Path(settingsfpathstr)
+    sfdir=sfp.parent
+    with open(sfp,'r') as f:
+        usersdict=yaml.safe_load(f)
+    datapathdict={}
+    for name in usersdict:
+        datapathdict[name]=determinepath(sfdir,usersdict[name])
+    assert (username.lower() in [x.lower() for x in datapathdict.keys()] ),\
+        f"invalid user name {username}. Accepts one of {[x.lower() for x in datapathdict.keys()]}"
 
     load_scripts=[]
     for ldentry in configgy['load_scripts']:
@@ -35,8 +55,6 @@ def read_load_confile(cfpathstr,refresh_all):
         lspath=determinepath(cfdir,load_dict)
         ls_funcname=load_dict['funcname']
         load_scripts.append([lspath,ls_funcname])
-    #print(lspath)
-    #importlib.import_module(lspath.name)
 
     conn=sqlite3.connect(logdbpath)
     atexit.register(conn.close)
@@ -53,6 +71,7 @@ def read_load_confile(cfpathstr,refresh_all):
     c.execute('''CREATE TABLE IF NOT EXISTS PLATES (plateid text, filename text, sheetname text,scriptname text, pklplate glob)''')
     c.execute('''CREATE TABLE IF NOT EXISTS LSCRIPTS (scriptname text, pkl_ctime text, pklfname text)''')
 
+    ##TODO- move all DB commands to end so that they only execute if all functions successful
     outplates=[]
     for ls in load_scripts:
         load_required=False
@@ -77,11 +96,16 @@ def read_load_confile(cfpathstr,refresh_all):
             load_required=True
 #            conn.close()
         if load_required:
-            spec=importlib.util.spec_from_file_location(str(ls[0]),ls[0])#'kdfs/dload_dir/load_scripts/testscript.py','kdfs/dload_dir/load_scripts/testscript.py')#
+            modulepath=Path(ls[0])
+            spec=importlib.util.spec_from_file_location(modulepath.name,modulepath)#'kdfs/dload_dir/load_scripts/testscript.py','kdfs/dload_dir/load_scripts/testscript.py')#
             themodule=importlib.util.module_from_spec(spec)
             spec.loader.exec_module(themodule)
             m2c=getattr(themodule,ls[1])
-            plates=m2c()
+            try:
+                plates=m2c(datapathdict[username])
+            except:
+                conn.close()
+                exit(f'Error occurred in load script {lsentry}. Quitting.')
             for plate in plates:
                 newpltuple=(plate.plateid,plate.ifpath.name,plate.expsheet,lsentry,pickle.dumps(plate))
                 c.execute('''INSERT INTO PLATES VALUES (?,?,?,?,?)''',newpltuple)
@@ -104,7 +128,7 @@ def read_load_confile(cfpathstr,refresh_all):
     return outplates
 
 
-def load_tecandata(cfpathstr,refresh_all=False):
+def load_tecandata(cfpathstr,username,refresh_all=False):
     '''reads excel files using load scripts/functions as specified in a config file
 
     Arguments:
@@ -112,7 +136,7 @@ def load_tecandata(cfpathstr,refresh_all=False):
     Keyword Arguments:
         refresh_all: whether to reset all files for a fresh re-read (default False)
     '''
-    plates=read_load_confile(cfpathstr,refresh_all)
+    plates=loadplates_from_confiles(cfpathstr,'user_settings.yml',username,refresh_all)
     tpset=TecanSet(plates)
     return tpset
 #    mergedf=pd.concat([x for x in dfs],ignore_index=True)
