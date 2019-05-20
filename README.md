@@ -2,10 +2,23 @@
 
 Kirk's set of python programs and libraries for data analysis and sequence tools
 
-## dbminers
+##tecanpack
 
-_routines to extract protein or DNA sequences, focused on glycoside hydrolase applications_
+_functions and classes to read in data from tecan plates_
 
-* dbminers/pullycazy.py - scrape CAZY website for a given GH family, extracting metadata then calling Entrez e-utilities (via Biopython) to obtain fasta sequence and outputting results to a subfolder
-  * for example, `python pullcazy.py 11 <youremailaddress>` will download of GH family 11, type `python pullycazy.py --help` to see options
-* 
+* tecanio - TecanPlate and TecanSet core clasess
+* readers - functions to call to build these classes
+
+## phylotreepack
+
+_phylogenetic tree modification and visualization_
+
+- tree_modify.py - functions to create clustered trees and subtrees
+- treeviz - functions to vizualize trees (use matplotlib or other general viz libraries)
+- treestats - tree analysis
+
+## kmslib
+
+_random stuff_
+
+- hmmerkools package contains functions to read results of hmmsearch into a class
