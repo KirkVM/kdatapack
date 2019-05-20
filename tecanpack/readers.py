@@ -45,7 +45,8 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
         usersdict=yaml.safe_load(f)
     datapathdict={}
     for name in usersdict:
-        datapathdict[name]=determinepath(sfdir,usersdict[name])
+        if name==username:
+            datapathdict[name]=determinepath(sfdir,usersdict[name])
     assert (username.lower() in [x.lower() for x in datapathdict.keys()] ),\
         f"invalid user name {username}. Accepts one of {[x.lower() for x in datapathdict.keys()]}"
 
