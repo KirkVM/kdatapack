@@ -2,7 +2,7 @@
 
 Kirk's set of python programs and libraries for data analysis and sequence tools
 
-##tecanpack
+## tecanpack
 
 _functions and classes to read in data from tecan plates_
 
