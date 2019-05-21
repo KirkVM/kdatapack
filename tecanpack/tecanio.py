@@ -232,6 +232,8 @@ class TecanPlate:
         active_rows: list of row letters in the list (default ['A'-'H'])
         active_cols: list of integer column values (default [1-12])
         skipwells: list of str rowcol values to not include (eg. ['A11','C7']) (default [])
+        repeat_measurements: str rowcol values that represent repeat measurements of same assay/tube
+                            list of lists- eg [['A1','B1'],['H7','G7','B3]]
         itermethod: direction/rule to iterate through rows/cols in parallel with passing over list
                     (default 'byrow_wrap' = 'A1','A2',...,'B1','B2',...'H12')
         enames: list of str enzyme name vals in each well (default = None)

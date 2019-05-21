@@ -125,7 +125,9 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
         c.execute('''SELECT * FROM LSCRIPTS WHERE scriptname=(?)''',(lsentry,))
         lsrow=c.fetchone()
         picklefpath=pkl_fldrpath / lsrow['pklfname']
-        outplates.extend(pickle.load(open(picklefpath,'rb')))
+        with open(picklefpath,'rb') as f:
+            outplates.extend(pickle.load(f))
+#        outplates.extend(pickle.load(open(picklefpath,'rb')))
     conn.close()
     print(f'Loaded {len(outplates)} plates. Good job!')
     return outplates
