@@ -1,4 +1,4 @@
-import sqlite3,atexit,pickle
+import sqlite3,atexit,pickle,sys
 import yaml,os,uuid,datetime
 from pathlib import Path
 import importlib.util
@@ -43,12 +43,13 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
     sfdir=sfp.parent
     with open(sfp,'r') as f:
         usersdict=yaml.safe_load(f)
-    datapathdict={}
-    for name in usersdict:
-        if name==username:
-            datapathdict[name]=determinepath(sfdir,usersdict[name])
-    assert (username.lower() in [x.lower() for x in datapathdict.keys()] ),\
-        f"invalid user name {username}. Accepts one of {[x.lower() for x in datapathdict.keys()]}"
+    assert (username.lower() in [x.lower() for x in usersdict.keys()] ),\
+        f"invalid user name {username}. Accepts one of {[x.lower() for x in usersdict.keys()]}"
+    try:
+        datapath=determinepath(sfdir,usersdict[username])
+    except:
+        sys.exit(f'error parsing datapath for user {username}')
+    assert datapath.exists(), f'datapath {datapath} not found'
 
     load_scripts=[]
     for ldentry in configgy['load_scripts']:
@@ -103,10 +104,10 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
             spec.loader.exec_module(themodule)
             m2c=getattr(themodule,ls[1])
             try:
-                plates=m2c(datapathdict[username])
+                plates=m2c(datapath)
             except:
                 conn.close()
-                exit(f'Error occurred in load script {lsentry}. Quitting.')
+                sys.exit(f'Error occurred in load script {lsentry}. Quitting.')
             for plate in plates:
                 newpltuple=(plate.plateid,plate.ifpath.name,plate.expsheet,lsentry,pickle.dumps(plate))
                 c.execute('''INSERT INTO PLATES VALUES (?,?,?,?,?)''',newpltuple)
@@ -126,6 +127,7 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
         picklefpath=pkl_fldrpath / lsrow['pklfname']
         outplates.extend(pickle.load(open(picklefpath,'rb')))
     conn.close()
+    print(f'Loaded {len(outplates)} plates. Good job!')
     return outplates
 
 
