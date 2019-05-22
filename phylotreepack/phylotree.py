@@ -7,7 +7,7 @@ from matplotlib.path import Path
 import matplotlib.patches as patches
 
 from bokeh.models import ColumnDataSource
-from bokeh.models.glyphs import Line
+from bokeh.models.glyphs import Line,MultiLine
 
 def depth_sort(trees):
     """sorts trees according to ranked criteria: 1.#nodes to deepest leaf, 2.dist. to deepest leaf
@@ -35,29 +35,56 @@ class FigureCoordBox:
     def copy(self):
         return FigureCoordBox(self.xmin,self.xmax,self.ymin,self.ymax)
 
+def node_rotater(rotation,*xyvals):
+    rotate_angle=(rotation/360)*2*np.pi
+    rmatrix=np.array(([np.cos(rotate_angle),-np.sin(rotate_angle)],\
+                        [np.sin(rotate_angle),np.cos(rotate_angle)]))
+    retxys=[]
+    for xyval in xyvals:
+        if xyval[0] is None:
+            retxys.append(None)
+        else:
+            retxys.append(  np.array(xyval)@rmatrix )
+    return retxys
+
+@dataclass
+class TreeFrameCoords:
+    framecoords_init:FrameCoords=None
+
+
 @dataclass
 class FrameCoords:
+    '''stores coordinates of tree bases,stems in left-to-right rectangular form'''
     stem_start:(float,float)=(None,None)
     stem_end:(float,float)=(None,None)
     base_start:(float,float)=(None,None)
     base_end:(float,float)=(None,None)
-    def get_framepath(self,orientation='left'):
+    def get_framepath(self,rotation):
+        '''returns coordinates for a given node (optionally following some rotation)
+        
+        Arguments:
+            rotation - angle of plot rotation'''
+        xycoords=node_rotater(rotation,self.stem_start,self.stem_end,self.base_start,self.base_end)
         codes=[]
         verts=[]
         framepath=None
-        if self.stem_start is not None:
-            verts.extend([self.stem_start,self.stem_end])
+        if self.stem_start[0] is not None:
+            verts.extend([xycoords[0],xycoords[1]])
             codes.extend([Path.MOVETO,Path.LINETO])
-        if self.base_start is not None:
-            verts.extend([self.base_start,self.base_end])
+        if self.base_start[0] is not None:
+            verts.extend([xycoords[2],xycoords[3]])
             codes.extend([Path.MOVETO,Path.LINETO])
         framepath=Path(verts,codes)
         return framepath
-    def get_cds(self,orientation='left'):
-        ldict={}
-        if self.stem_start is not None:
-            ldict['x']=[self.stem_start[0],self.stem_end[0]]
-            ldict['y']=[self.stem_start[1],self.stem_end[1]]
+    def get_cds(self,rotation):
+        xycoords=node_rotater(rotation,self.stem_start,self.stem_end,self.base_start,self.base_end)
+        ldict={'xs':[],'ys':[]}
+        if self.stem_start[0] is not None:
+            ldict['xs'].append([xycoords[0][0],xycoords[1][0]])
+            ldict['ys'].append([xycoords[0][1],xycoords[1][1]   ])
+        if self.base_start[0] is not None:
+            ldict['xs'].append([xycoords[2][0],xycoords[3][0]])
+            ldict['ys'].append([xycoords[2][1],xycoords[3][1]   ])
         return ColumnDataSource(ldict)
 
 
@@ -104,6 +131,9 @@ class PTNodeGlyph:
         self.boundbox=None
 
 
+def make_node_cds():
+        
+
 
 class PhyloTree:
     def __init__(self,etenode,depth=0):
@@ -111,6 +141,7 @@ class PhyloTree:
             self.etenode=etenode.copy() #make a copy of top node
         else:
             self.etenode=etenode
+        self.name=etenode.name
         self.depth=depth
         self.dist=etenode.dist
         self.etenode.add_feature('ptnode',self)
@@ -119,6 +150,7 @@ class PhyloTree:
         self.glyphs=None
         self.branchbox=None
         self.alignbox=None
+        self.cds=ColumnDataSource()
         etechildren=self.etenode.children
         self.children=[PhyloTree(etekid,depth=self.depth+1) for etekid in etechildren] 
     def is_leaf(self):
@@ -129,14 +161,16 @@ class PhyloTree:
     def get_leaves(self):
         eteleaves=self.etenode.get_leaves()
         return [eteleaf.ptnode for eteleaf in eteleaves]
-    def mpldraw(self,sepsize=0.1,ax=None):
+    def mpldraw(self,sepsize=0.1,ax=None,rotation=0):
         set_branch_coordinates(self,0,0,sepsize)
         pcoords=[]
         for etenode in self.etenode.traverse():
             ptn=etenode.ptnode
-            patch=patches.PathPatch(ptn.framecoords.get_framepath())#,facecolor='black',edgecolor='black')
+
+
+            patch=patches.PathPatch(ptn.framecoords.get_framepath(rotation))#,facecolor='black',edgecolor='black')
             ax.add_patch(patch)
-            verts=ptn.framepath.vertices
+            verts=ptn.framecoords.get_framepath(rotation).vertices
             pcoords.append([min([x[0] for x in verts]),max([x[0] for x in verts]), min([x[1] for x in verts]),max([x[1] for x in verts])])
 
         xmin=min(x[0] for x in pcoords)
@@ -146,12 +180,13 @@ class PhyloTree:
         ax.set_ylim((ymin,ymax))
         ax.set_xlim((xmin,xmax))
 
-    def bokehdraw(self,sepsize=0.2,plot=None):
+    def bokehdraw(self,sepsize=0.2,plot=None,rotation=0):
         set_branch_coordinates(self,0,0,sepsize)
         for etenode in self.etenode.traverse():
             ptn=etenode.ptnode
-            cds=ptn.framecoords.get_cds()
-            glyph=Line(x='x',y='y')
+            cds=ptn.framecoords.get_cds(rotation)
+            #glyph=Line(x='x',y='y')
+            glyph=MultiLine(xs='xs',ys='ys')
             plot.add_glyph(cds,glyph)
 #            cds=ColumnDataSource(dict(x=))
 
