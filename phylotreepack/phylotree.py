@@ -2,7 +2,7 @@
 from ete3 import Tree
 from dataclasses import dataclass
 import numpy as np
-
+import itertools
 from matplotlib.path import Path
 import matplotlib.patches as patches
 
@@ -35,7 +35,7 @@ class FigureCoordBox:
     def copy(self):
         return FigureCoordBox(self.xmin,self.xmax,self.ymin,self.ymax)
 
-def node_rotater(rotation,*xyvals):
+def trotater(rotation,*xyvals):
     rotate_angle=(rotation/360)*2*np.pi
     rmatrix=np.array(([np.cos(rotate_angle),-np.sin(rotate_angle)],\
                         [np.sin(rotate_angle),np.cos(rotate_angle)]))
@@ -47,10 +47,44 @@ def node_rotater(rotation,*xyvals):
             retxys.append(  np.array(xyval)@rmatrix )
     return retxys
 
-@dataclass
-class TreeFrameCoords:
-    framecoords_init:FrameCoords=None
-
+class PTCoords:
+    def __init__(self,framecoords,rotation):
+        self.framecoords=framecoords
+        self.rotation=None
+        self.stem_xys=[] #for matplotlib xys
+        self.base_xys=[]
+        self.mpl_path_verts=[]
+        self.mpl_path_codes=[]
+        self.stem_xvals=[] #for bokeh lines
+        self.stem_yvals=[]
+        self.base_xvals=[]
+        self.base_yvals=[]
+        self.xmin=None
+        self.ymin=None
+        self.xmax=None
+        self.ymax=None
+        self.framepath=None
+        self.set_coords(rotation)
+    def set_coords(self,rotation):
+        if self.rotation==rotation:
+            return
+        if self.framecoords.stem_start[0] is not None:
+            self.stem_xys=trotater(rotation,self.framecoords.stem_start,self.framecoords.stem_end)
+        if self.framecoords.base_start[0] is not None:
+            self.base_xys=trotater(rotation,self.framecoords.base_start,self.framecoords.base_end)
+        self.stem_xvals = [x[0] for x in self.stem_xys]
+        self.stem_yvals = [x[1] for x in self.stem_xys]
+        self.base_xvals = [x[0] for x in self.base_xys]
+        self.base_yvals = [x[1] for x in self.base_xys]
+        self.mpl_path_verts=self.stem_xys+self.base_xys
+        code_cycle=itertools.cycle([Path.MOVETO,Path.LINETO])
+        self.mpl_path_codes=[next(code_cycle) for x in range(len(self.mpl_path_verts))]
+#        self.framepath=Path(self.mpl_path_verts,self.mpl_path_codes)
+        self.xmin=min([x[0] for x in self.stem_xys+self.base_xys])
+        self.xmax=max([x[0] for x in self.stem_xys+self.base_xys])
+        self.ymin=min([x[1] for x in self.stem_xys+self.base_xys])
+        self.ymax=max([x[1] for x in self.stem_xys+self.base_xys])
+        self.rotation=rotation #now it's set so can skip next time
 
 @dataclass
 class FrameCoords:
@@ -59,34 +93,6 @@ class FrameCoords:
     stem_end:(float,float)=(None,None)
     base_start:(float,float)=(None,None)
     base_end:(float,float)=(None,None)
-    def get_framepath(self,rotation):
-        '''returns coordinates for a given node (optionally following some rotation)
-        
-        Arguments:
-            rotation - angle of plot rotation'''
-        xycoords=node_rotater(rotation,self.stem_start,self.stem_end,self.base_start,self.base_end)
-        codes=[]
-        verts=[]
-        framepath=None
-        if self.stem_start[0] is not None:
-            verts.extend([xycoords[0],xycoords[1]])
-            codes.extend([Path.MOVETO,Path.LINETO])
-        if self.base_start[0] is not None:
-            verts.extend([xycoords[2],xycoords[3]])
-            codes.extend([Path.MOVETO,Path.LINETO])
-        framepath=Path(verts,codes)
-        return framepath
-    def get_cds(self,rotation):
-        xycoords=node_rotater(rotation,self.stem_start,self.stem_end,self.base_start,self.base_end)
-        ldict={'xs':[],'ys':[]}
-        if self.stem_start[0] is not None:
-            ldict['xs'].append([xycoords[0][0],xycoords[1][0]])
-            ldict['ys'].append([xycoords[0][1],xycoords[1][1]   ])
-        if self.base_start[0] is not None:
-            ldict['xs'].append([xycoords[2][0],xycoords[3][0]])
-            ldict['ys'].append([xycoords[2][1],xycoords[3][1]   ])
-        return ColumnDataSource(ldict)
-
 
 
 def set_branch_coordinates(branch,xcoord,ycoord,sepsize):
@@ -131,9 +137,6 @@ class PTNodeGlyph:
         self.boundbox=None
 
 
-def make_node_cds():
-        
-
 
 class PhyloTree:
     def __init__(self,etenode,depth=0):
@@ -146,13 +149,24 @@ class PhyloTree:
         self.dist=etenode.dist
         self.etenode.add_feature('ptnode',self)
         self.framecoords=None
-        self.framepath=None
+        self.ptcoords=None
         self.glyphs=None
         self.branchbox=None
         self.alignbox=None
-        self.cds=ColumnDataSource()
+        self.cds=None
         etechildren=self.etenode.children
         self.children=[PhyloTree(etekid,depth=self.depth+1) for etekid in etechildren] 
+        self.set_coords(0.1)
+        
+        self.cds_dict={}#'name':self.name}
+        if self.is_leaf():
+            self.cds_dict.update({'gbacc':[self.name,self.name]})
+    def set_coords(self,sepsize):
+        set_branch_coordinates(self,0,0,sepsize)
+        for etenode in self.etenode.traverse():
+            ptn=etenode.ptnode
+            ptn.ptcoords=PTCoords(ptn.framecoords,rotation=0)
+
     def is_leaf(self):
         if len(self.children)==0: 
             return True 
@@ -162,32 +176,46 @@ class PhyloTree:
         eteleaves=self.etenode.get_leaves()
         return [eteleaf.ptnode for eteleaf in eteleaves]
     def mpldraw(self,sepsize=0.1,ax=None,rotation=0):
-        set_branch_coordinates(self,0,0,sepsize)
-        pcoords=[]
+#        set_branch_coordinates(self,0,0,sepsize)
         for etenode in self.etenode.traverse():
             ptn=etenode.ptnode
-
-
-            patch=patches.PathPatch(ptn.framecoords.get_framepath(rotation))#,facecolor='black',edgecolor='black')
+            ptn.ptcoords.set_coords(rotation)
+            framepathobj=Path(ptn.ptcoords.mpl_path_verts,ptn.ptcoords.mpl_path_codes)
+            patch=patches.PathPatch(framepathobj)
             ax.add_patch(patch)
-            verts=ptn.framecoords.get_framepath(rotation).vertices
-            pcoords.append([min([x[0] for x in verts]),max([x[0] for x in verts]), min([x[1] for x in verts]),max([x[1] for x in verts])])
-
-        xmin=min(x[0] for x in pcoords)
-        xmax=max(x[1] for x in pcoords)
-        ymin=min(x[2] for x in pcoords)
-        ymax=max(x[3] for x in pcoords)
+        all_ptnc=[x.ptnode.ptcoords for x in self.etenode.traverse()]
+        xmin=min([x.xmin for x in all_ptnc])
+        xmax=max([x.xmax for x in all_ptnc])
+        ymin=min([x.ymin for x in all_ptnc])
+        ymax=max([x.ymax for x in all_ptnc])
         ax.set_ylim((ymin,ymax))
         ax.set_xlim((xmin,xmax))
 
     def bokehdraw(self,sepsize=0.2,plot=None,rotation=0):
-        set_branch_coordinates(self,0,0,sepsize)
+#        set_branch_coordinates(self,0,0,sepsize)
         for etenode in self.etenode.traverse():
             ptn=etenode.ptnode
-            cds=ptn.framecoords.get_cds(rotation)
-            #glyph=Line(x='x',y='y')
-            glyph=MultiLine(xs='xs',ys='ys')
-            plot.add_glyph(cds,glyph)
+            ptn.ptcoords.set_coords(rotation)
+            ptn.cds=ColumnDataSource(ptn.cds_dict)
+            if ptn.is_leaf():
+                ntype='leaf_node'
+            else:
+                ntype='internal_node'
+#            source=ColumnDataSource({'xs':[ptn.ptcoords.stem_xvals,ptn.ptcoords.base_xvals],\
+#                                    'ys':[ptn.ptcoords.stem_yvals,ptn.ptcoords.base_yvals]})
+            if len(ptn.ptcoords.stem_xvals)==2:
+                ptn.cds.add(ptn.ptcoords.stem_xvals,'stem_xs')
+                ptn.cds.add(ptn.ptcoords.stem_yvals,'stem_ys')
+                sglyph=Line(x='stem_xs',y='stem_ys')
+#``                plot.add_glyph(ptn.cds,sglyph)
+                plot.add_glyph(ptn.cds,sglyph,name=ntype)
+            if len(ptn.ptcoords.base_xvals)==2:
+                ptn.cds.add(ptn.ptcoords.base_xvals,'base_xs')
+                ptn.cds.add(ptn.ptcoords.base_yvals,'base_ys')
+                bglyph=Line(x='base_xs',y='base_ys')
+                plot.add_glyph(ptn.cds,bglyph,name=ntype)
+#            fglyph=MultiLine(xs='xs',ys='ys')
+#            plot.add_glyph(source,fglyph)
 #            cds=ColumnDataSource(dict(x=))
 
 
