@@ -307,6 +307,23 @@ def read_clustertree_fromnewick(treefpath:str):
 #    return t
 
 
+def depth_sort(trees):
+    """sorts trees according to ranked criteria: 1.#nodes to deepest leaf, 2.dist. to deepest leaf
+
+    Arguments:
+        [ete trees] 
+    Returns:
+        [sorted ete trees], shortest first"""
+    dtzips=[]
+    for t in trees:
+        leaves=t.get_leaves()
+        max_depth=max([len(l.get_ancestors()) for l in leaves])
+        max_dist=max([t.get_distance(l) for l in leaves])
+        dtzips.append([max_depth,max_dist,t])
+    dtzips.sort(key=lambda x:x[1])#,reverse=True)
+    sorted_trees=[x[2] for x in dtzips]#.sort(key=lambda x:x[0])]
+    return sorted_trees
+
 """
 def calc_leafweights(t):
         seqwts_=[]

@@ -6,25 +6,8 @@ import itertools
 from matplotlib.path import Path
 import matplotlib.patches as patches
 
-from bokeh.models import ColumnDataSource
-from bokeh.models.glyphs import Line,MultiLine
-
-def depth_sort(trees):
-    """sorts trees according to ranked criteria: 1.#nodes to deepest leaf, 2.dist. to deepest leaf
-
-    Arguments:
-        [ete trees] 
-    Returns:
-        [sorted ete trees], shortest first"""
-    dtzips=[]
-    for t in trees:
-        leaves=t.get_leaves()
-        max_depth=max([len(l.get_ancestors()) for l in leaves])
-        max_dist=max([t.get_distance(l) for l in leaves])
-        dtzips.append([max_depth,max_dist,t])
-    dtzips.sort(key=lambda x:x[1])#,reverse=True)
-    sorted_trees=[x[2] for x in dtzips]#.sort(key=lambda x:x[0])]
-    return sorted_trees
+from bokeh.models import ColumnDataSource,Label
+from bokeh.models.glyphs import Line,MultiLine,Quad
 
 @dataclass(repr=True)
 class FigureCoordBox:
@@ -94,6 +77,9 @@ class FrameCoords:
     base_start:(float,float)=(None,None)
     base_end:(float,float)=(None,None)
 
+class GlyphCoords:
+    stem_start:(float,float)=(None,None)
+    stem_end:(float,float)=(None,None)
 
 def set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     """Function called by EteMplTree to determine how to plot tree. 
@@ -123,7 +109,6 @@ def set_branch_coordinates(branch,xcoord,ycoord,sepsize):
         ycoord_ascend,ycoord_descend=set_branch_coordinates(sub_branch,xcoord,ycoord,sepsize)
         ycoord=ycoord_descend
         ycoord_ascends.append(ycoord_ascend)
-    #import pdb;pdb.set_trace()
     branch.framecoords=FrameCoords(stem_start=(xcoord-branch.dist,np.mean(ycoord_ascends)),
                                    stem_end=(xcoord,np.mean(ycoord_ascends)),
                                     base_start=(xcoord,min(ycoord_ascends)),
@@ -131,11 +116,17 @@ def set_branch_coordinates(branch,xcoord,ycoord,sepsize):
     
     return np.mean(ycoord_ascends),ycoord_descend
 
-
-class PTNodeGlyph:
-    def __init__(self,glyph):
+class PTGlyph:
+    def __init__(self,name,type,position='edge'):
+        self.name=name
+        self.position=position
         self.boundbox=None
-
+    def get_rendering(self,plot,ptree,rotation):
+#        align=TextAlign(15,20,5)
+        label=Label(x=ptree.ptcoords.stem_xys[1][0],y=ptree.ptcoords.stem_xys[1][1],text=ptree.decoration_dict[self.name],text_align='center',text_baseline='middle')
+        plot.add_layout(label)
+#        plot.label(x=ptree.ptcoords.stem_xys[1][0],y=ptree.ptcoords.stem_xys[1][1],text=ptree.decoration_dict[name])
+#        pass
 
 
 class PhyloTree:
@@ -148,37 +139,62 @@ class PhyloTree:
         self.depth=depth
         self.dist=etenode.dist
         self.etenode.add_feature('ptnode',self)
+
+        #these will stay as left-to-right-oriented base tree
         self.framecoords=None
+#        self.branch_glyphcoords=[] #deprecate?
+        
+        #these are coordinates to plot        
         self.ptcoords=None
-        self.glyphs=None
+        #self.ptgcoords=[]
+#        self.ptannotations=[]
+        self.ptglyphs=[] #deprecate?
+
         self.branchbox=None
         self.alignbox=None
         self.cds=None
         etechildren=self.etenode.children
         self.children=[PhyloTree(etekid,depth=self.depth+1) for etekid in etechildren] 
         self.set_coords(0.1)
-        
+        #get box coords here???
+         
+        self.decoration_dict={}
         self.cds_dict={}#'name':self.name}
         if self.is_leaf():
-            self.cds_dict.update({'gbacc':[self.name,self.name]})
+            #self.cds_dict.update({'gbacc':[self.name,self.name]})
+            self.cds_dict.update({'gbacc':[self.name]})#,self.name]})
+        
+        if self.is_leaf():
+            self.ntype='leaf_node' 
+        else:
+            self.ntype='internal_node'
+
     def set_coords(self,sepsize):
         set_branch_coordinates(self,0,0,sepsize)
-        for etenode in self.etenode.traverse():
-            ptn=etenode.ptnode
+        for ptn in self.traverse():
             ptn.ptcoords=PTCoords(ptn.framecoords,rotation=0)
 
-    def is_leaf(self):
-        if len(self.children)==0: 
-            return True 
-        else:
-            return False
-    def get_leaves(self):
+    ######\/##\/##ETE WRAPPERS#\/#\/#####
+    def is_leaf(self): #~wrapper
+        return len(self.children)==0
+    def get_leaves(self): #ETEWRAPPER
         eteleaves=self.etenode.get_leaves()
         return [eteleaf.ptnode for eteleaf in eteleaves]
+    def get_leaf_names(self): #ETE WRAPPER
+        return self.etenode.get_leaf_names()
+    def traverse(self): #ETE WRAPPER
+        '''yields a generator over all nodes by wrapping ete's traverse() method'''
+        for x in self.etenode.traverse():
+            yield x.ptnode
+    #####^^^^^ETE WRAPPERS^^^^########
+    
+    def add_leaf_decoration(self,keyname):
+        for lnode in self.get_leaves():
+            if keyname in [x.name for x in lnode.ptglyphs]: continue
+            lnode.ptglyphs.append(PTGlyph(keyname,'annotation'))
+        
     def mpldraw(self,sepsize=0.1,ax=None,rotation=0):
-#        set_branch_coordinates(self,0,0,sepsize)
-        for etenode in self.etenode.traverse():
-            ptn=etenode.ptnode
+        for ptn in self.traverse():
             ptn.ptcoords.set_coords(rotation)
             framepathobj=Path(ptn.ptcoords.mpl_path_verts,ptn.ptcoords.mpl_path_codes)
             patch=patches.PathPatch(framepathobj)
@@ -192,37 +208,42 @@ class PhyloTree:
         ax.set_xlim((xmin,xmax))
 
     def bokehdraw(self,sepsize=0.2,plot=None,rotation=0):
-#        set_branch_coordinates(self,0,0,sepsize)
-        for etenode in self.etenode.traverse():
-            ptn=etenode.ptnode
+        for ptn in self.traverse():
             ptn.ptcoords.set_coords(rotation)
+            for x in ptn.decoration_dict:
+                ptn.cds_dict[x]=[ptn.decoration_dict[x]]
+#            ptn.cds_dict.update(ptn.decoration_dict)
             ptn.cds=ColumnDataSource(ptn.cds_dict)
-            if ptn.is_leaf():
-                ntype='leaf_node'
-            else:
-                ntype='internal_node'
 #            source=ColumnDataSource({'xs':[ptn.ptcoords.stem_xvals,ptn.ptcoords.base_xvals],\
 #                                    'ys':[ptn.ptcoords.stem_yvals,ptn.ptcoords.base_yvals]})
-            if len(ptn.ptcoords.stem_xvals)==2:
-                ptn.cds.add(ptn.ptcoords.stem_xvals,'stem_xs')
-                ptn.cds.add(ptn.ptcoords.stem_yvals,'stem_ys')
-                sglyph=Line(x='stem_xs',y='stem_ys')
-#``                plot.add_glyph(ptn.cds,sglyph)
-                plot.add_glyph(ptn.cds,sglyph,name=ntype)
+            xs2plot=[]
+            ys2plot=[]
+            if len(ptn.ptcoords.stem_xvals)==2: #has stem?
+                xs2plot.append(ptn.ptcoords.stem_xvals)
+                ys2plot.append(ptn.ptcoords.stem_yvals)
+#                ptn.cds.add(stemxys,'stem_xys')
             if len(ptn.ptcoords.base_xvals)==2:
-                ptn.cds.add(ptn.ptcoords.base_xvals,'base_xs')
-                ptn.cds.add(ptn.ptcoords.base_yvals,'base_ys')
-                bglyph=Line(x='base_xs',y='base_ys')
-                plot.add_glyph(ptn.cds,bglyph,name=ntype)
-#            fglyph=MultiLine(xs='xs',ys='ys')
-#            plot.add_glyph(source,fglyph)
-#            cds=ColumnDataSource(dict(x=))
+                xs2plot.append(ptn.ptcoords.base_xvals)
+                ys2plot.append(ptn.ptcoords.base_yvals)
+            ptn.cds.add(xs2plot,'xs')
+            ptn.cds.add(ys2plot,'ys')
+            fglyph=MultiLine(xs='xs',ys='ys')
+
+#            plot.multi_line(xs='xs',ys='ys',name='leaf_node') #this deosn't work. why?
+            #plot.add_glyph(ptn.cds,fglyph,name=self.ntype)
+            plot.add_glyph(ptn.cds,fglyph,name=ptn.ntype)#'leaf_node')#self.ntype)
+        for lnode in self.get_leaves():
+            for ptg in lnode.ptglyphs:
+                ptg.get_rendering(plot,lnode,rotation)
+#think about this below section to make hovering work better.....
+#            if ntype=='leaf_node':
+#                ptn.cds.add([ptn.ptcoords.ymax],'qtop')
+#                ptn.cds.add([ptn.ptcoords.ymin],'qbottom')
+#                ptn.cds.add([ptn.ptcoords.xmin],'qleft')
+#                ptn.cds.add([ptn.ptcoords.xmax],'qright')
+#                plot.quad(top='qtop',bottom='qbottom',left='qleft',right='qright',source=ptn.cds,name='leaf_node')
 
 
-#
-#                
-#                [ptn.framecoords.stem_start[0],ptn.framecoords.stem_end[0]],[ptn.framecoords.stem_start[1],ptn.framecoords.stem_end[1]]) 
-#        dask.compute(drawtasks)
 
 #class PhyloTree:
 #    """Class for plotting an ete3 tree using matplotlib rendering
