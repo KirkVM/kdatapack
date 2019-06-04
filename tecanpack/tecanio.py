@@ -132,7 +132,7 @@ def make_plates_rxn_duplicates(plate1,plate2,allow_subplate=False):
         plate2.welldatadf.loc[dfidx,'rxnvesselid']=rxnvesselid2keep #set df also
 
 class TecanWell:
-    def __init__(self,well_settings_dict,use_experimenter_defaults=True):
+    def __init__(self,well_settings_dict,use_experimenter_defaults=False):
         #can add some error handling here...
         self.well_settings_dict=well_settings_dict
         if use_experimenter_defaults:
