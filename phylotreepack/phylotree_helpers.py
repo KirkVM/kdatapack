@@ -1,5 +1,10 @@
+from bokeh.plotting import reset_output,show,figure,ColumnDataSource,curdoc
+from bokeh.models import HoverTool,ResetTool,BoxZoomTool,PanTool,Line
+from phylotreepack import phylotree
+import pickle
+from ete3 import Tree
 
-def update_ddict_fromdb(ptree,dbcursor,fields=['pdbids','ecs','subfam','extragbs'],searchby='gbacc'):
+def update_leafcds_fromdb(ptree,dbcursor,fields=['pdbids','ecs','subfam','extragbs'],searchby='gbacc'):
     assert (searchby=='gbacc')
     for lnode in ptree.get_leaves():
         lname=lnode.name

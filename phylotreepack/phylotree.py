@@ -1,5 +1,5 @@
 #import dask
-import itertools,math
+import itertools,math,os,sqlite3
 from ete3 import Tree
 from dataclasses import dataclass
 import numpy as np
@@ -104,7 +104,9 @@ def set_branch_coordinates(branch,xcoord,ycoord,sepsize,tdistmax):
     if branch.is_leaf():
         stempath=PathXYCoords( xvals=[xcoord,xcoord+branch.dist],yvals=[ycoord,ycoord] )
         branch.r0framecoords=FrameCoords(stem=stempath)
-        nodebox_xmax=max(xcoord+branch.dist,xcoord+tdistmax*0.025)
+        #nodebox_xmax=max(xcoord+branch.dist,xcoord+tdistmax*0.025)
+        #nodebox_xmax=max(xcoord+branch.dist,1.025*tdistmax)
+        nodebox_xmax=1.025*tdistmax
         branch.r0node_edgecoords=PathXYCoords(xyvals=[(xcoord,ycoord-0.5*sepsize),(nodebox_xmax,ycoord-0.5*sepsize),
                                             (nodebox_xmax,ycoord+0.5*sepsize),(xcoord,ycoord+0.5*sepsize)])
         branch.r0branch_edgecoords=branch.r0node_edgecoords.copy()
@@ -184,7 +186,7 @@ class PhyloTree:
         self.leaf_dashcoords=None
         if self.depth==0:
             #self.set_r0coords(0.1) #values are set in here...
-            set_branch_coordinates(self,0,0,0.1,self.etenode.get_farthest_leaf()[1])
+            set_branch_coordinates(self,0,0,0.1,self.etenode.get_farthest_leaf()[1]+self.dist)
             #create plot details with rotation=0
             rhe=self.r0branch_edgecoords.boundbox.xmax
             for ptn in self.traverse():
@@ -231,11 +233,33 @@ class PhyloTree:
         for x in self.etenode.traverse():
             yield x.ptnode
     #####^^^^^ETE WRAPPERS^^^^########
-    
-    def add_leaf_decoration(self,keyname):
-        for lnode in self.get_leaves():
-            if keyname in [x.name for x in lnode.ptglyphs]: continue #it's already there
-            lnode.ptglyphs.append(PTGlyph(keyname,'annotation'))
+
+    def update_leafcdsdict_fromdb(self,dbpathstr,fields=['pdbids','ecs','subfam','extragbs'],searchby='gbacc'):
+        assert(os.path.exists(dbpathstr))
+        conn=sqlite3.connect('GH5/GH5DB.sql')
+        conn.row_factory=sqlite3.Row
+        dbcursor=conn.cursor()
+ 
+        assert (searchby=='gbacc')
+        for field in fields:
+            self.leaf_cds_dict[field]=[]
+        for gbacc in self.leaf_cds_dict['gbacc']:
+            dbcursor.execute('''SELECT * FROM CAZYSEQDATA WHERE acc=(?)''',(gbacc,))
+            row=dbcursor.fetchone()
+            for field in fields:
+                if row is None and row[field] is not None:
+                    self.leaf_cds_dict[field].append(None)
+                else:
+                    self.leaf_cds_dict[field].append(row[field])
+        conn.close()
+#                if row[field] is None: continue
+#                
+#                lnode.decoration_dict[field]=row[field]
+#    
+#    def add_leaf_decoration(self,keyname):
+#        for lnode in self.get_leaves():
+#            if keyname in [x.name for x in lnode.ptglyphs]: continue #it's already there
+#            lnode.ptglyphs.append(PTGlyph(keyname,'annotation'))
     def apply_rotation(self,rotation):
         if rotation!=self.framecoords.rotation:
             self.framecoords=self.r0framecoords.copy()
@@ -291,7 +315,7 @@ class PhyloTree:
         self.internal_cds.add(int_frame_xs,'frame_xs')
         self.internal_cds.add(int_frame_ys,'frame_ys')
         fglyph=MultiLine(xs='frame_xs',ys='frame_ys')
-        plot.add_glyph(self.leaf_cds,fglyph,name='leaf_node')
+        plot.add_glyph(self.leaf_cds,fglyph)#,name='leaf_node')
         plot.add_glyph(self.internal_cds,fglyph,name='internal_node')
 
         qlefts=[]
