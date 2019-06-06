@@ -172,7 +172,8 @@ class PhyloTree:
         self.internal_cds=None
         self.leaf_cds_dict={}#'name':self.name}
         self.internal_cds_dict={}#'name':self.name}
-
+        self.fglyph=None
+        self.qglyph=None
         #################
         #these will stay as left-to-right-oriented ('rotation0'='r0') base tree
         self.r0framecoords=None
@@ -290,8 +291,10 @@ class PhyloTree:
             ptn.apply_rotation(rotation)
         leaf_frame_xs=[]
         leaf_frame_ys=[]
+        leaf_frame_lws=[]
         int_frame_xs=[]
         int_frame_ys=[]
+        int_frame_lws=[]
         self.leaf_cds=ColumnDataSource(self.leaf_cds_dict)
         self.internal_cds=ColumnDataSource(self.internal_cds_dict)
         #plot the frame as one MultiLine
@@ -307,16 +310,21 @@ class PhyloTree:
             if ptn.ntype=='leaf_node':
                 leaf_frame_xs.extend(frame_xs)
                 leaf_frame_ys.extend(frame_ys)
+                leaf_frame_lws.append(1.0)
             else:
                 int_frame_xs.extend(frame_xs)
                 int_frame_ys.extend(frame_ys)
+                int_frame_lws.append(1.0)
+                int_frame_lws.append(1.0)
         self.leaf_cds.add(leaf_frame_xs,'frame_xs')
         self.leaf_cds.add(leaf_frame_ys,'frame_ys')
+        self.leaf_cds.add(leaf_frame_lws,'frame_lws')
         self.internal_cds.add(int_frame_xs,'frame_xs')
         self.internal_cds.add(int_frame_ys,'frame_ys')
-        fglyph=MultiLine(xs='frame_xs',ys='frame_ys')
-        plot.add_glyph(self.leaf_cds,fglyph)#,name='leaf_node')
-        plot.add_glyph(self.internal_cds,fglyph,name='internal_node')
+        self.internal_cds.add(int_frame_lws,'frame_lws')
+        self.fglyph=MultiLine(xs='frame_xs',ys='frame_ys',line_width='frame_lws')
+        plot.add_glyph(self.leaf_cds,self.fglyph)#,name='leaf_node')
+        plot.add_glyph(self.internal_cds,self.fglyph,name='internal_node')
 
         qlefts=[]
         qrights=[]
@@ -333,8 +341,8 @@ class PhyloTree:
         self.leaf_cds.add(qrights,'nodebox_rights')
         self.leaf_cds.add(qtops,'nodebox_tops')
         self.leaf_cds.add(qbottoms,'nodebox_bottoms')
-        qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='#b3de69',fill_alpha=0,line_alpha=0)                
-        plot.add_glyph(self.leaf_cds,qglyph,name='leaf_node')#'leaf_node')#self.ntype)
+        self.qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='#b3de69',fill_alpha=0,line_alpha=0)                
+        plot.add_glyph(self.leaf_cds,self.qglyph,name='leaf_node')#'leaf_node')#self.ntype)
 #        print(len(self.cds.data['frame_xs']))#,len(self.cds.data['gbacc']))
 #            
 #            for x in ptn.decoration_dict:
