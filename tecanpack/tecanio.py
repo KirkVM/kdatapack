@@ -107,7 +107,7 @@ def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
     platedf=pd.read_excel(ifpath,skiprows=skiprows,nrows=8,usecols=usecols,index_col=0,sheet_name=shname)
     #check structure
     assert (list(platedf.index)==['A','B','C','D','E','F','G','H'] and \
-            list(platedf.columns)!=['1','2','3','4','5','6','7','8','9','10','11','12']), \
+            list(platedf.columns)==[1,2,3,4,5,6,7,8,9,10,11,12]), \
             "excel df read-in indexing incorrect. Is row/col set correctly?"
     return platedf
 
