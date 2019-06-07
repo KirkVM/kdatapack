@@ -16,7 +16,7 @@ console.log('Tap event')
 
 with open('st.pkl','rb') as f:
     etetree=pickle.load(f)
-layout,p1,p2,ptree=bokehapp_layout.build_layout(etetree,'junk')
+layout,p1,p2,ptree,_=bokehapp_layout.build_layout(etetree,'junk')
 p1.js_on_event('tap',callback)
 ##output_notebook()
 #show(row(p1,p2))

@@ -3,8 +3,10 @@ import itertools,math,os,sqlite3
 from ete3 import Tree
 from dataclasses import dataclass
 import numpy as np
+import xarray as xr
 from matplotlib.path import Path
 import matplotlib.patches as patches
+from ete3 import NCBITaxa
 
 from bokeh.models import ColumnDataSource,Label
 from bokeh.models.glyphs import Line,MultiLine,Quad,Patch
@@ -200,6 +202,8 @@ class PhyloTree:
                 if ptn.is_leaf():
                     ptn.leaf_dashcoords=ptn.r0leaf_dashcoords.copy()
             self.leaf_cds_dict['gbacc']=[ptn.name for ptn in self.traverse() if ptn.ntype=='leaf_node']#append(ptn.name#[ptn.name for ptn in self.traverse()]
+            self.leaf_cds_dict['qhatch']=['blank' for _ in range(len(self.leaf_cds_dict['gbacc']))]
+            self.leaf_cds_dict['qcolor']=[None for _ in range(len(self.leaf_cds_dict['gbacc']))]
 #            self.cds_dict['ntype']=[ptn.ntype for ptn in self.traverse()]
         ####################################################
 ##        self.branch_glyphcoords=[] #deprecate?
@@ -253,6 +257,51 @@ class PhyloTree:
                 else:
                     self.leaf_cds_dict[field].append(row[field])
         conn.close()
+    def update_leafcdsdict_fromxr(self,xrpathstr):#,fields=['pdbids','ecs','subfam','extragbs'],searchby='gbacc'):
+        mds=xr.open_dataset(xrpathstr)
+        ncbitaxa=NCBITaxa()
+        knownra=mds.taxra[np.isnan(mds.taxra.loc[:,'species'].values)==False]
+        known_accs=knownra.dbseq.values
+        known_species=ncbitaxa.translate_to_names(knownra.loc[:,'species'].values)
+#        known_phylum=ncbitaxa.translate_to_names(knownra.loc[:,'phylum'].values)
+#        knowndict={ka:[ks,kc,kp] for ka,ks,kc,kp in zip(known_accs,known_species,known_class,known_phylum)}
+        knowndict={ka:ks for ka,ks in zip(known_accs,known_species)}
+        self.leaf_cds_dict['species']=[]
+#        self.leaf_cds_dict['class']=[]
+#        self.leaf_cds_dict['phylum']=[]
+        for gbacc in self.leaf_cds_dict['gbacc']:
+            if gbacc in known_accs:
+                self.leaf_cds_dict['species'].append(knowndict[gbacc])
+#                self.leaf_cds_dict['class'].append(knowndict[gbacc][0])
+#                self.leaf_cds_dict['phylum'].append(knowndict[gbacc][0])
+            else:
+                self.leaf_cds_dict['species'].append('Unknown')
+        knownra=mds.taxra[np.isnan(mds.taxra.loc[:,'class'].values)==False]
+        known_accs=knownra.dbseq.values
+        known_class=ncbitaxa.translate_to_names(knownra.loc[:,'class'].values)
+        knowndict={ka:kc for ka,kc in zip(known_accs,known_class)}
+        self.leaf_cds_dict['class']=[]
+        for gbacc in self.leaf_cds_dict['gbacc']:
+            if gbacc in known_accs:
+                self.leaf_cds_dict['class'].append(knowndict[gbacc])
+            else:
+                self.leaf_cds_dict['class'].append('Unknown')
+
+        knownra=mds.taxra[np.isnan(mds.taxra.loc[:,'phylum'].values)==False]
+        known_accs=knownra.dbseq.values
+        known_class=ncbitaxa.translate_to_names(knownra.loc[:,'phylum'].values)
+        knowndict={ka:kc for ka,kc in zip(known_accs,known_class)}
+        self.leaf_cds_dict['phylum']=[]
+        for gbacc in self.leaf_cds_dict['gbacc']:
+            if gbacc in known_accs:
+                self.leaf_cds_dict['phylum'].append(knowndict[gbacc])
+            else:
+                self.leaf_cds_dict['phylum'].append('Unknown')
+ 
+#
+#                self.leaf_cds_dict['class'].append('Unknown')
+#                self.leaf_cds_dict['phylum'].append('Unknown')
+
 #                if row[field] is None: continue
 #                
 #                lnode.decoration_dict[field]=row[field]
@@ -341,7 +390,8 @@ class PhyloTree:
         self.leaf_cds.add(qrights,'nodebox_rights')
         self.leaf_cds.add(qtops,'nodebox_tops')
         self.leaf_cds.add(qbottoms,'nodebox_bottoms')
-        self.qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='#b3de69',fill_alpha=0,line_alpha=0)                
+        self.qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='qcolor',line_alpha=0,\
+                        hatch_pattern='qhatch')#,fill_alpha=0,line_alpha=0)                
         plot.add_glyph(self.leaf_cds,self.qglyph,name='leaf_node')#'leaf_node')#self.ntype)
 #        print(len(self.cds.data['frame_xs']))#,len(self.cds.data['gbacc']))
 #            
