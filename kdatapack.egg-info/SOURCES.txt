@@ -14,6 +14,7 @@ phylotreepack/bokehapp.py
 phylotreepack/bokehapp_junk.py
 phylotreepack/bokehapp_layout.py
 phylotreepack/bokehapp_layout_junk.py
+phylotreepack/bokehapp_stupid.py
 phylotreepack/phylotree.py
 phylotreepack/phylotree_helpers.py
 phylotreepack/tree_modify.py

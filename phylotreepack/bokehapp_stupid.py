@@ -1,9 +1,9 @@
 from bokeh.plotting import reset_output,show,figure,ColumnDataSource,curdoc
 from bokeh.models import HoverTool,ResetTool,BoxZoomTool,PanTool,Line,Range1d,TapTool
 from bokeh.layouts import row,column
-from bokeh.models.glyphs import Text,Quad
+from bokeh.models.glyphs import Text,Quad,MultiLine
 from bokeh.models.widgets import DataTable,TableColumn
-from bokeh.models.widgets.inputs import MultiSelect
+from bokeh.models.widgets.inputs import MultiSelect,Select,AutocompleteInput,TextInput
 
 from bokeh.models.callbacks import CustomJS
 from bokeh.io import output_notebook
@@ -33,12 +33,12 @@ stuffcode="""
     const inds = cds.selected.indices;
 
     for (var i = 0; i < inds.length; i++) {
-        if (data['frame_lws'][inds[i]]==1) {
+        if (data['frame_lws'][inds[i]]==0.5) {
             data['frame_lws'][inds[i]]=3;
             data['rpnl_tfsize'][inds[i]]="10pt";
             data['qhatch'][inds[i]]="diagonal_cross";
         }else{
-            data['frame_lws'][inds[i]]=1;
+            data['frame_lws'][inds[i]]=0.5;
             data['rpnl_tfsize'][inds[i]]="4pt";
             data['qhatch'][inds[i]]="blank";
         }
@@ -55,14 +55,43 @@ coolcode="""
     for (var i=0;i<data['phylum'].length;i++){
         for (j=0;j<cb_obj.value.length;j++){
             if (data['phylum'][i]==cb_obj.value[j]){
-                data['qcolor'][i]="red";
+                data['qcolor'][i]="blue";
+                data['qfillalpha'][i]=0.5;
+            }else{
+                data['qcolor'][i]=null;
+                data['qfillalpha'][i]=0;
             }
         }
     }
     data.change.emit();
+    cds.change.emit();
 """
+accode="""
+    var data=cds.data;
+    for (var i=0;i<data['species'].length;i++){
+        if (data['species'][i]==cb_obj.value){
+            data['qcolor'][i]="green";
+            data['qfillalpha'][i]=0.5;
+        }else{
+            data['qcolor'][i]=null;
+            data['qfillalpha'][i]=0;
+        }
+    }
+    data.change.emit();
+    cds.change.emit();
+"""
+
+#with open('pt.pkl','rb') as f:
 with open('st.pkl','rb') as f:
     etetree=pickle.load(f)
+
+#def get_source_data(currentsource,fchange,vals):
+def get_updated_values(src):
+    src2=ColumnDataSource()#data=src.data)
+    for k in src.data:
+        src2.add(src.data[k],k)
+#    del src
+    return src2
 
 hover_tool = HoverTool(names=['leaf_node'],tooltips=[    ("GB acc", "@gbacc"),('sf','@subfam'),\
                         ('phylum','@phylum'),('class','@class'),('species','@species')])
@@ -74,16 +103,30 @@ p2 = figure(plot_width=60,plot_height=pheight,tools=[hover_tool2],x_range=Range1
 ptree=phylotree.PhyloTree(etetree)
 ptree.update_leafcdsdict_fromdb("GH5/GH5DB.sql")
 ptree.update_leafcdsdict_fromxr("GH5/gh5ds.nc")
-
 ptree.bokehdraw(plot=p1,rotation=0)
+
+internal_source=ColumnDataSource(data=ptree.internal_cds.data)
+leaf_source=ColumnDataSource(data=ptree.leaf_cds.data)
+fglyph=MultiLine(xs='frame_xs',ys='frame_ys',line_width='frame_lws')
+p1.add_glyph(leaf_source,fglyph)#,name='leaf_node')
+p1.add_glyph(internal_source,fglyph)#,name='internal_node')
+
+#qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='qcolor',line_alpha=0,\
+#                        hatch_pattern='qhatch')#,fill_alpha=0,line_alpha=0)                
+superq=p1.quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_alpha='qfillalpha',fill_color='qcolor',line_alpha=0,\
+                        hatch_pattern='qhatch',source=leaf_source,name='leaf_node')#,fill_alpha=0,line_alpha=0) )
+#p1.add_glyph(leaf_source,qglyph,name='leaf_node')#'leaf_node')#self.ntype)
+
 p1.x_range=Range1d(0,ptree.branch_edgecoords.boundbox.xmax,bounds='auto')
-ptree.leaf_cds.add(['normal' for _ in ptree.leaf_cds.data['gbacc']],'rpnl_tfstyle')
-ptree.leaf_cds.add(['4pt' for _ in ptree.leaf_cds.data['gbacc']],'rpnl_tfsize')
+leaf_source.add(['normal' for _ in ptree.leaf_cds.data['gbacc']],'rpnl_tfstyle')
+leaf_source.add(['4pt' for _ in ptree.leaf_cds.data['gbacc']],'rpnl_tfsize')
+
 textglyph=Text(x=1,y='nodebox_bottoms',text='gbacc',text_font_size='rpnl_tfsize')#,text_font_style='rpnl_tfstyle')#,text_font='Arial')#,text_align='center')#,name='leaf_node')
-p2.add_glyph(ptree.leaf_cds,textglyph)
+p2.add_glyph(leaf_source,textglyph)
 p2selquad=Quad(left=0,right=1,bottom='nodebox_bottoms',top='nodebox_tops',hatch_pattern="qhatch",hatch_alpha=0.5,fill_color=None,line_color=None)
-p2.add_glyph(ptree.leaf_cds,p2selquad)
-leafdict=ptree.leaf_cds.data.copy()
+p2.add_glyph(leaf_source,p2selquad)
+
+leafdict=leaf_source.data.copy()
 eckeepers=[x is not None for x in leafdict['ecs']]
 ecdict={}
 for key in leafdict:
@@ -156,33 +199,53 @@ dtbl=DataTable(source=dtcds,columns=dtcolumns,width=200,height=50,editable=True,
 #    dtcds.change.emit();
 #    dtbl.change.emit();
 #"""))
-stuff=CustomJS(args={'cds':ptree.leaf_cds,'dtcds':dtcds,'dtbl':dtbl},code=stuffcode)
+
+stuff=CustomJS(args={'cds':leaf_source,'dtcds':dtcds,'dtbl':dtbl},code=stuffcode)
 p1.add_tools(TapTool(callback=stuff,names=['leaf_node']))
 
-cooldude=CustomJS(args={'cds':ptree.leaf_cds},code=coolcode)
-gms=MultiSelect(title='Select phylum',callback=cooldude,options=list(set(ptree.leaf_cds.data['phylum'])),width=200,height=70)
+cooldude=CustomJS(args={'cds':leaf_source},code=coolcode)
+gms=MultiSelect(title='Select phylum',callback=cooldude,options=list(set(leaf_source.data['phylum'])),width=200,height=70)
 
-
+acdude=CustomJS(args={'cds':leaf_source},code=accode)
+acw=AutocompleteInput(title='Organism name',callback=acdude,completions=list(set(leaf_source.data['species'])),width=200,height=50)
+#acw=TextInput(title='Organism name',callback=acdude,width=200,height=50)
+#import numpy as np
 #def adjuster(attr,old,new):
-#    global ptree
-##    print(ptree.leaf_cds['gbacc'])
-#    del ptree.leaf_cds.data['qcolor']
-#    ptree.leaf_cds.data['qcolor']=[]
-#
-#    for x,phylum in enumerate(ptree.leaf_cds.data['phylum']):
+#    global leaf_source
+#    global p1,superq
+#    newsource=ColumnDataSource(data=leaf_source.data)
+#    for x,phylum in enumerate(leaf_source.data['phylum']):
 #        if phylum in new:
-#            ptree.leaf_cds.data['qcolor'].append('red')
-##            print(phylum,new)
-##            ptree.leaf_cds.data['qcolor'][x]='red'
+#            leaf_source.data['qcolor'][x]='blue'
+#            leaf_source.data['qfillalpha'][x]=0.5
+##            leaf_source.data['nodebox_lefts'][x]=np.nan#[np.nan for _ in range(len(leaf_source.data))]#leaf_source.data['nodebox_lefts'][x]-0.1
 #        else:
-#            ptree.leaf_cds.data['qcolor'].append(None)
-#            #ptree.leaf_cds.data['qcolor'][x]=None
-#    print(ptree.leaf_cds.data['qcolor'])
-#    print(old,new)
-#    print(ptree.leaf_cds.data['gbacc'])
+#            leaf_source.data['qcolor'][x]=None
+#            leaf_source.data['qfillalpha'][x]=0
+##            leaf_source.data['nodebox_lefts'][x]=np.nan#[np.nan for _ in range(len(leaf_source.data))]#leaf_source.data['nodebox_lefts'][x]-0.1
+#            leaf_source.data['nodebox_lefts'][x]-=0.1
+    #    print(leaf_source.data['qcolor'])
+#    newsource=get_updated_values(leaf_source)
+#    superq.source=newsource#leaf_source.data['qcolor'][:]
+#    newsource.data['qcolor']=leaf_source.data['qcolor'][:]
+#    newsource.data['qfillalpha']=leaf_source.data['qcolor'][:]
+#    superq=p1.quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_alpha='qfillalpha',fill_color='qcolor',line_alpha=0,\
+#                        hatch_pattern='qhatch',source=newsource,name='leaf_node')#,fill_alpha=0,line_alpha=0) )
+#    leaf_source.data=newsource.data.copy()
 #
-#gms=MultiSelect(title='Select phylum',options=list(set(ptree.leaf_cds.data['phylum'])),width=200,height=70)
+##
+#    hover_tool = HoverTool(names=['leaf_node'],tooltips=[    ("GB acc", "@gbacc"),('sf','@subfam'),\
+#                        ('phylum','@phylum'),('class','@class'),('species','@species')])
+#    p1.tools=[hover_tool,ResetTool(),BoxZoomTool(),PanTool()]#plot_width=1100, plot_height=700,
+##    p1.toolbar_location = 'above'
+#    replot_superq(superq,leaf_source)
+#    superq.source=leaf_source
+#    p1.add_glyph(leaf_source,superq,name='leaf_node')#'leaf_node')#self.ntype)
+#
+#gms=MultiSelect(title='Select phylum',options=list(set(leaf_source.data['phylum'])),width=200,height=70)
 #gms.on_change('value',adjuster)
+
+
 
 
 #    p1.js_on_event('tap',callback)
@@ -204,7 +267,7 @@ p2.xaxis.visible=False
 p2.xgrid.visible=False
 p2.yaxis.visible=False
 p2.ygrid.visible=False
-layout=column(row(dtbl,gms),row(p1,p2))
+layout=column(row(dtbl,gms,acw),row(p1,p2))
 #layout=column(row(dtbl),row(p1,p2))
 #output_notebook()
 #show(layout)

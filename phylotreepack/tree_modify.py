@@ -273,7 +273,46 @@ def read_clustertree_fromnewick(treefpath:str):
         accnames=lnode.name
         lnode.add_feature('accs',[x for x in accnames.strip('|').split('|')])
     return ctree
-
+from ghseqdb import seqdbutils
+def remove_similars(etetree,cutoff,ghdbpathstr=None,pwidpathstr=None,keeporgs=[]):
+    #first delete iff one has no activity data and no gene data
+    assert (ghdbpathstr is not None), "no ghdb"
+    assert (pwidpathstr is not None), "no pwidfile"
+    pwdf=pd.read_csv(pwidpathstr,sep='\s+',index_col=0,skiprows=1,header=None)
+    pwdf.columns=list(pwdf.index)
+    conn=seqdbutils.gracefuldbopen(ghdbpathstr) 
+    c=conn.cursor()
+    for l in etetree.get_leaves():
+        c.execute('''SELECT * FROM CAZYSEQDATA WHERE acc=(?)''',(l.name)) 
+        row=c.fetchone()
+        if row['pdbids'] is not None:
+            l.add_feature('pdbids',rowpdbids)
+    conn.close()
+    return
+#    ndels_=[]
+#    for rthresh in [0,1]:
+#        for acc1 in pwdf.index:
+#            for acc2 in pwdf.columns:
+#                if acc1==acc2:continue
+#                similarity=pwdf[acc1][acc2]
+#                if similarity>cutoff:
+#                    for acc in [acc1,acc2]:
+#                        other_acc=set([acc1,acc2]).difference([acc])
+#                        if len(set([acc1,acc2]).intersection(ndels_))==0:
+#                            #add whether it has a pdb here...
+#                            if (self.ghactdf.df.get_value(acc,'LTested')==False) or (not keepacts):
+#                                if rthresh==1:
+#                                    ndels_.append(acc)
+#                                if rthresh==0:#more stringent first pass:
+#                                    if acc not in self.sekgroup.domainHT.keys():
+#                                        ndels_.append(acc)
+#    #now let's find the keeper accs_:
+#    allaccs_=map(lambda x:x.name,self.tree.get_leaves())
+#    accs2keep_=list(set(allaccs_).difference(ndels_))
+#    newkpt=self.getsubtree_fromlist(accs2keep_)#prunetoca=True):
+##        newktree=get_Ksubtree(self,accs2keep_)
+#    return newkpt
+#        
 #def bottomup_prune(t,lnames):
 #    '''returns a tree pruned to contain only leaves
 #    with names indicated in lnames; also removes parent nodes that dont

@@ -204,6 +204,7 @@ class PhyloTree:
             self.leaf_cds_dict['gbacc']=[ptn.name for ptn in self.traverse() if ptn.ntype=='leaf_node']#append(ptn.name#[ptn.name for ptn in self.traverse()]
             self.leaf_cds_dict['qhatch']=['blank' for _ in range(len(self.leaf_cds_dict['gbacc']))]
             self.leaf_cds_dict['qcolor']=[None for _ in range(len(self.leaf_cds_dict['gbacc']))]
+            self.leaf_cds_dict['qfillalpha']=[0 for _ in range(len(self.leaf_cds_dict['gbacc']))]
 #            self.cds_dict['ntype']=[ptn.ntype for ptn in self.traverse()]
         ####################################################
 ##        self.branch_glyphcoords=[] #deprecate?
@@ -359,21 +360,21 @@ class PhyloTree:
             if ptn.ntype=='leaf_node':
                 leaf_frame_xs.extend(frame_xs)
                 leaf_frame_ys.extend(frame_ys)
-                leaf_frame_lws.append(1.0)
+                leaf_frame_lws.append(0.5)
             else:
                 int_frame_xs.extend(frame_xs)
                 int_frame_ys.extend(frame_ys)
-                int_frame_lws.append(1.0)
-                int_frame_lws.append(1.0)
+                int_frame_lws.append(0.5)
+                int_frame_lws.append(0.5)
         self.leaf_cds.add(leaf_frame_xs,'frame_xs')
         self.leaf_cds.add(leaf_frame_ys,'frame_ys')
         self.leaf_cds.add(leaf_frame_lws,'frame_lws')
         self.internal_cds.add(int_frame_xs,'frame_xs')
         self.internal_cds.add(int_frame_ys,'frame_ys')
         self.internal_cds.add(int_frame_lws,'frame_lws')
-        self.fglyph=MultiLine(xs='frame_xs',ys='frame_ys',line_width='frame_lws')
-        plot.add_glyph(self.leaf_cds,self.fglyph)#,name='leaf_node')
-        plot.add_glyph(self.internal_cds,self.fglyph,name='internal_node')
+        ######self.fglyph=MultiLine(xs='frame_xs',ys='frame_ys',line_width='frame_lws')
+        ######plot.add_glyph(self.leaf_cds,self.fglyph)#,name='leaf_node')
+        ######plot.add_glyph(self.internal_cds,self.fglyph,name='internal_node')
 
         qlefts=[]
         qrights=[]
@@ -390,9 +391,17 @@ class PhyloTree:
         self.leaf_cds.add(qrights,'nodebox_rights')
         self.leaf_cds.add(qtops,'nodebox_tops')
         self.leaf_cds.add(qbottoms,'nodebox_bottoms')
-        self.qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='qcolor',line_alpha=0,\
-                        hatch_pattern='qhatch')#,fill_alpha=0,line_alpha=0)                
-        plot.add_glyph(self.leaf_cds,self.qglyph,name='leaf_node')#'leaf_node')#self.ntype)
+        ######self.qglyph=Quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_color='qcolor',line_alpha=0,\
+        ######                hatch_pattern='qhatch')#,fill_alpha=0,line_alpha=0)                
+        ######plot.add_glyph(self.leaf_cds,self.qglyph,name='leaf_node')#'leaf_node')#self.ntype)
+
+
+
+
+
+
+
+
 #        print(len(self.cds.data['frame_xs']))#,len(self.cds.data['gbacc']))
 #            
 #            for x in ptn.decoration_dict:
