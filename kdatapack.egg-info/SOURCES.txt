@@ -1,8 +1,10 @@
 README.md
 setup.py
 dfitlib/__init__.py
+dfitlib/fitmodels.py
 dfitlib/fitstats.py
 dfitlib/freq_fitting.py
+dfitlib/loss_funcs.py
 dfitlib/mlsampling.py
 kdatapack.egg-info/PKG-INFO
 kdatapack.egg-info/SOURCES.txt
@@ -20,5 +22,7 @@ proteinseqpack/aligner.py
 proteinseqpack/pseqgroup.py
 tecanpack/__init__.py
 tecanpack/activity_calcs.py
+tecanpack/cleaners.py
 tecanpack/readers.py
 tecanpack/tecanio.py
+tecanpack/visualizers.py

@@ -2,7 +2,7 @@ import datetime,itertools,re,uuid
 import pandas as pd
 import dataclasses
 from dataclasses import dataclass
-from bokeh.plotting import figure,show,reset_output,ColumnDataSource
+from bokeh.plotting import figure,show,reset_output,ColumnDataSource,output_notebook
 from bokeh.models.glyphs import Text
 from bokeh.models import FixedTicker,HoverTool,Range1d
 
@@ -314,7 +314,7 @@ class TecanPlate:
             xlval=self.exceldf[int(colstr)].at[rowstr]
             self.welldict[rowstr+colstr].measurement=xlval
             self.welldatadf['measurement'].at[dfidx]=xlval#self.welldatadf.append(newdf,ignore_index=True,sort=False)
-    def view_plate(self):
+    def view_plate(self,inline_jupyter=True):
         reset_output()
         hover_tool=HoverTool(names=['stuff'],tooltips=[('Well','@wellid'),('Enzyme','@enzyme'),('Substrate','@substrate'),('Standard','@standard')]
                     )
@@ -368,7 +368,9 @@ class TecanPlate:
         #p.yaxis.major_label_standoff=int(-30*pscale/100)#-20#f'{int(14*pscale/100)}pt'
         p.y_range=Range1d(0.4*pscale,pscale*(9-0.4))
         p.x_range=Range1d(-(0.6*pscale),pscale*(12-0.4))
-        return p
+        if inline_jupyter:
+            output_notebook()
+        show(p)
 
 def get_plthovers(welldfrow):
     cdict={}
