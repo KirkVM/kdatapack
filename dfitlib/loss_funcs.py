@@ -8,8 +8,9 @@ from dfitlib import fitmodels
 
 
 def linearfit_l2(xs, ys,intercept,*lin_coefficients):
-    estimate=fitmodels.linear_model(xs,intercept,lin_coefficients) 
-    delta=xs-ys
+    
+    estimates=fitmodels.linear_model(xs,intercept,lin_coefficients) 
+    delta=estimates-ys
     return np.dot(delta,delta)
 
 
