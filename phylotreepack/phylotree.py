@@ -10,6 +10,7 @@ from ete3 import NCBITaxa
 
 from bokeh.models import ColumnDataSource,Label
 from bokeh.models.glyphs import Line,MultiLine,Quad,Patch
+from phylotreepack import treestats
 
 @dataclass(repr=True)
 class FigBoundBox:
@@ -238,17 +239,22 @@ class PhyloTree:
         '''yields a generator over all nodes by wrapping ete's traverse() method'''
         for x in self.etenode.traverse():
             yield x.ptnode
+    def calc_treecoverage(self,acclist):
+        return treestats.calc_treecoverage(self.etenode,acclist)
+    def calc_treelength(self):
+        return treestats.calc_treelength(self.etenode)
     #####^^^^^ETE WRAPPERS^^^^########
 
     def update_leafcdsdict_fromdb(self,dbpathstr,fields=['pdbids','ecs','subfam','extragbs'],searchby='gbacc'):
         assert(os.path.exists(dbpathstr))
-        conn=sqlite3.connect('GH5/GH5DB.sql')
+        conn=sqlite3.connect(dbpathstr)
         conn.row_factory=sqlite3.Row
         dbcursor=conn.cursor()
  
         assert (searchby=='gbacc')
         for field in fields:
             self.leaf_cds_dict[field]=[]
+        self.leaf_cds_dict['subfamstr']=[]
         for gbacc in self.leaf_cds_dict['gbacc']:
             dbcursor.execute('''SELECT * FROM CAZYSEQDATA WHERE acc=(?)''',(gbacc,))
             row=dbcursor.fetchone()
@@ -257,6 +263,11 @@ class PhyloTree:
                     self.leaf_cds_dict[field].append(None)
                 else:
                     self.leaf_cds_dict[field].append(row[field])
+        for sf in self.leaf_cds_dict['subfam']:
+            if sf is not None:
+                self.leaf_cds_dict['subfamstr'].append(str(sf))
+            else:
+                self.leaf_cds_dict['subfamstr'].append('unk')
         conn.close()
     def update_leafcdsdict_fromxr(self,xrpathstr):#,fields=['pdbids','ecs','subfam','extragbs'],searchby='gbacc'):
         mds=xr.open_dataset(xrpathstr)
