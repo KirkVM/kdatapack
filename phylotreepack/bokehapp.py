@@ -48,8 +48,32 @@ stuffcode="""
 """
 
 def tablecallback(attr,old,new):
-    print(dtcds.data)
-    print('table_callback')
+    tax_sking=' '
+    tax_phylum=' '
+    tax_class=' '
+    tax_genus=' '
+    tax_sp=' '
+    md_ecs=' '
+    md_pdbs=' '
+
+    for acc in dtcds.data['accs']:
+        for x,cdacc in enumerate(ptree.leaf_cds.data['gbacc']):
+            if cdacc==acc:
+                tax_sking=ptree.leaf_cds.data['superkingdom'][x]
+                tax_phylum=ptree.leaf_cds.data['phylum'][x]
+                tax_class=ptree.leaf_cds.data['class'][x]
+                tax_genus=ptree.leaf_cds.data['genus'][x]
+                tax_sp=ptree.leaf_cds.data['species'][x]
+
+        for x,ecacc in enumerate(ec_cds.data['gbacc']):
+            if ecacc==acc:
+                md_ecs=ec_cds.data['ecs'][x]
+        for x,mdacc in enumerate(pdb_cds.data['gbacc']):
+            if mdacc==acc:
+                md_pdbs=pdb_cds.data['pdbids'][x]
+        print(f'{acc}\t{tax_sking}\t{tax_phylum}\t{tax_class}\t{tax_genus}\t{tax_sp}\t{md_ecs}\t{md_pdbs}')
+
+
 
 def pmsfunc():
     qclist=ptree.leaf_cds.data['qcolor'][:]
@@ -103,6 +127,20 @@ def sfmsfunc():
             qfalist[x]=0
     ptree.leaf_cds.data['qcolor']=qclist#['Blue' for _ in range(len(leaf_source.data['species']))]
     ptree.leaf_cds.data['qfillalpha']=qfalist
+
+def kmsfunc():
+    qclist=ptree.leaf_cds.data['qcolor'][:]
+    qfalist=ptree.leaf_cds.data['qfillalpha'][:]
+    for x,sp in enumerate(ptree.leaf_cds.data['superkingdom']):
+        if sp in list(kms.value):
+            qclist[x]='Blue'
+            qfalist[x]=0.5
+        else:
+            qclist[x]=None
+            qfalist[x]=0
+    ptree.leaf_cds.data['qcolor']=qclist#['Blue' for _ in range(len(leaf_source.data['species']))]
+    ptree.leaf_cds.data['qfillalpha']=qfalist
+
 
 
 def acfunc():
@@ -163,7 +201,7 @@ hover_tool = HoverTool(names=['leaf_node'],tooltips=[    ("GB acc", "@gbacc"),('
                         ('phylum','@phylum'),('class','@class'),('species','@species'),('qcolor','@qcolor'),\
                         ('qhatch','@qhatch')])
 hover_tool2 = HoverTool(names=['metadata'],tooltips=[    ("GB acc", "@gbacc"),("ECs", "@ecs"),('PDBs','@pdbids')])
-pheight=1100
+pheight=1400
 p1 = figure(plot_width=850,plot_height=pheight,tools=[hover_tool,ResetTool(),BoxZoomTool(),PanTool()])#plot_width=1100, plot_height=700,
     #pheight=int(len(ptree.get_leaves())*1.5)
 p2 = figure(plot_width=60,plot_height=pheight,tools=[hover_tool2],x_range=Range1d(0,2),y_range=p1.y_range)
@@ -252,6 +290,11 @@ gms=MultiSelect(title='Select genus',\
                 width=200,height=70)
 gms.on_change('value',lambda attr,old,new:gmsfunc())
 
+kms=MultiSelect(title='Kingdom',\
+                options=[x[0] for x in collections.Counter(ptree.leaf_cds.data['superkingdom']).most_common()],\
+                width=200,height=70)
+kms.on_change('value',lambda attr,old,new:kmsfunc())
+
 sfms=MultiSelect(title='Subfams',\
                 options=[x[0] for x in collections.Counter(ptree.leaf_cds.data['subfamstr']).most_common()],\
                 width=150,height=70)
@@ -308,7 +351,7 @@ p2.ygrid.visible=False
 
 
 #layout=column(row(column(dtbl,sfms),column(pms,cms),column(gms,acw),column(row(psb,tcb),row(tltbl,tctbl))),row(p1,p2))
-layout=column(row(column(dtbl,sfms),column(pms,cms),column(gms,acw),column(row(psb,tcb),row(tltbl,tctbl))),row(p1,p2))
+layout=column(row(column(dtbl,sfms),column(pms,cms),column(gms,kms,acw),column(row(psb,tcb),row(tltbl,tctbl))),row(p1,p2))
 #layout=row(p1,p2)
 curdoc().add_root(layout)
 #superq=p1.quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_alpha='qfillalpha',fill_color='qcolor',line_alpha=0,\

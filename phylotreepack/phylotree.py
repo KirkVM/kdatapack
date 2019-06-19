@@ -321,6 +321,17 @@ class PhyloTree:
                 self.leaf_cds_dict['genus'].append(knowndict[gbacc])
             else:
                 self.leaf_cds_dict['genus'].append('Unknown')
+        
+        knownra=mds.taxra[np.isnan(mds.taxra.loc[:,'superkingdom'].values)==False]
+        known_accs=knownra.dbseq.values
+        known_class=ncbitaxa.translate_to_names(knownra.loc[:,'superkingdom'].values)
+        knowndict={ka:kc for ka,kc in zip(known_accs,known_class)}
+        self.leaf_cds_dict['superkingdom']=[]
+        for gbacc in self.leaf_cds_dict['gbacc']:
+            if gbacc in known_accs:
+                self.leaf_cds_dict['superkingdom'].append(knowndict[gbacc])
+            else:
+                self.leaf_cds_dict['superkingdom'].append('Unknown')
  
 #
 #                self.leaf_cds_dict['class'].append('Unknown')
