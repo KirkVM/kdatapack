@@ -48,15 +48,14 @@ stuffcode="""
 """
 
 def tablecallback(attr,old,new):
-    tax_sking=' '
-    tax_phylum=' '
-    tax_class=' '
-    tax_genus=' '
-    tax_sp=' '
-    md_ecs=' '
-    md_pdbs=' '
-
     for acc in dtcds.data['accs']:
+        tax_sking=' '
+        tax_phylum=' '
+        tax_class=' '
+        tax_genus=' '
+        tax_sp=' '
+        md_ecs=' '
+        md_pdbs=' '
         for x,cdacc in enumerate(ptree.leaf_cds.data['gbacc']):
             if cdacc==acc:
                 tax_sking=ptree.leaf_cds.data['superkingdom'][x]
@@ -198,8 +197,7 @@ with open(treefpath,'rb') as f:
     etetree=pickle.load(f)
 
 hover_tool = HoverTool(names=['leaf_node'],tooltips=[    ("GB acc", "@gbacc"),('sf','@subfam'),\
-                        ('phylum','@phylum'),('class','@class'),('species','@species'),('qcolor','@qcolor'),\
-                        ('qhatch','@qhatch')])
+                        ('phylum','@phylum'),('class','@class'),('species','@species')])
 hover_tool2 = HoverTool(names=['metadata'],tooltips=[    ("GB acc", "@gbacc"),("ECs", "@ecs"),('PDBs','@pdbids')])
 pheight=1400
 p1 = figure(plot_width=850,plot_height=pheight,tools=[hover_tool,ResetTool(),BoxZoomTool(),PanTool()])#plot_width=1100, plot_height=700,
@@ -275,6 +273,7 @@ jscallback=CustomJS(args={'cds':ptree.leaf_cds,'dtcds':dtcds},code=stuffcode)
 p1.add_tools(TapTool(callback=jscallback))#,names=['leaf_node']))
 
 #cooldude=CustomJS(args={'cds':leaf_source},code=coolcode)
+
 pms=MultiSelect(title='Select phylum',\
                 options=[x[0] for x in collections.Counter(ptree.leaf_cds.data['phylum']).most_common()],\
                 width=200,height=70)

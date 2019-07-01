@@ -226,7 +226,7 @@ class TecanPlate:
                       skipwells=[],repeat_measurements=[],itermethod='by_row',
                       enames=None,econcs=None,snames=None,sconcs=None,standardnames=None,standardconcs=None,
                       rxnphs=None,rxntemps=None,rxntimes=None,buffernames=None,
-                      predvlp_dlnfactors=None,postdvlp_dlnfactors=None):
+                      predvlp_dlnfactors=None,postdvlp_dlnfactors=None,sbarcodes=None):
         """
         Keyword arguments:
         active_rows: list of row letters in the list (default ['A'-'H'])
@@ -261,7 +261,8 @@ class TecanPlate:
         varied_dict={'ename':enames,'econc':econcs,'sname':snames,'sconc':sconcs,
                      'standardname':standardnames,'standardconc':standardconcs,
                      'rxnph':rxnphs,'rxntemp':rxntemps,'rxntime':rxntimes,'buffername':buffernames,
-                     'predvlp_dlnfactor':predvlp_dlnfactors,'postdvlp_dlnfactor':postdvlp_dlnfactors}
+                     'predvlp_dlnfactor':predvlp_dlnfactors,'postdvlp_dlnfactor':postdvlp_dlnfactors,
+                     'sbarcode':sbarcodes}
         for ckey in list(varied_dict.keys()):
             if varied_dict[ckey] is None:
                 del varied_dict[ckey]

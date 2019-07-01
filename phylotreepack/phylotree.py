@@ -153,6 +153,9 @@ class PTGlyph:
 #        plot.label(x=ptree.ptcoords.stem_xys[1][0],y=ptree.ptcoords.stem_xys[1][1],text=ptree.decoration_dict[name])
 #        pass
 
+#had to change this for some trees (default=1000)
+import sys
+sys.setrecursionlimit(2000)
 class PhyloTree:
     def __init__(self,etenode,depth=0):
         if depth==0:
@@ -259,7 +262,8 @@ class PhyloTree:
             dbcursor.execute('''SELECT * FROM CAZYSEQDATA WHERE acc=(?)''',(gbacc,))
             row=dbcursor.fetchone()
             for field in fields:
-                if row is None and row[field] is not None:
+                #if row is None and row[field] is not None:
+                if row is None or row[field] is None:
                     self.leaf_cds_dict[field].append(None)
                 else:
                     self.leaf_cds_dict[field].append(row[field])
