@@ -7,9 +7,10 @@ from dfitlib import fitmodels
 #    return numpy.dot(delta, delta)
 
 
-def linearfit_l2(xs, ys,intercept,*lin_coefficients):
-    
-    estimates=fitmodels.linear_model(xs,intercept,lin_coefficients) 
+def linearfit_l2(ptuple,xs, ys):
+    intercept=ptuple[0]
+    slopes=ptuple[1:]
+    estimates=fitmodels.linear_model(xs,intercept,*slopes) 
     delta=estimates-ys
     return np.dot(delta,delta)
 

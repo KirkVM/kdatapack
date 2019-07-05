@@ -24,7 +24,16 @@ import numpy as np
 #    return np.dot(lin_coefficients,xs)
 
 
-def linear_model(xs,intercept,slope):
+def linear_model(xvals,intercept,*slopes):
     '''returns linear function of x values
     '''
-    return slope*xs+intercept
+    rval=np.zeros(len(xvals))
+    rval+=intercept
+    if len(slopes)==1:
+        slopes=slopes[0]
+    else:
+        slopes=np.array(slopes)
+    newsum=np.dot(xvals,slopes)
+    
+    return rval+newsum
+#    return slope*xs+intercept
