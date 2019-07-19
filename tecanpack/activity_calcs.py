@@ -42,7 +42,7 @@ def get_calibration_standard(df,detection):
 def calc_well_yield(measuredval,int,slope):
     return (measuredval-int)/slope
 
-def add_wyield(df,controldf=None):
+def add_wyield(df,controldf=None,bl_subtract=None):
     """returns a df with average value for each unique sname,sconc,ename,econc"""
     calibration_standard={'DNS':{'slope':1.0,'int':0.05}}
     calibration_standard.update({'BCA':{'slope':1.99,'int':0.15}})
@@ -50,7 +50,28 @@ def add_wyield(df,controldf=None):
         calint,calslope=get_calibration_standard(controldf,'BCA')
         calibration_standard['BCA']['int']=calint
         calibration_standard['BCA']['slope']=calslope
-    df.loc[:,'wyield']=df.measurement.apply(calc_well_yield,\
+    if bl_subtract=='eavg':
+        dfpctrl=df.dropna(subset=['econc'])
+        dfpctrl=dfpctrl[dfpctrl.sconc.isnull()]
+        pctrl_avg=dfpctrl.measurement.mean()
+        pbl_subtract=pctrl_avg-calibration_standard['BCA']['int']
+        print(f'subtracting {pbl_subtract} from e wells')
+        df=df.assign(measurement_bg=df.measurement)
+        for idx in df[df.econc.notnull()].index:
+            df.loc[idx,'measurement_bg']=df.measurement.loc[idx]-pbl_subtract
+#        df.loc[:,'measurement_bg']=[df.measurement.loc[x]-pbl_subtract if x in df.econc.notnull().index]# for x in df.index else df.measurement.loc[x]]
+        df.loc[:,'wyield']=df.measurement_bg.apply(calc_well_yield,\
+                       args=((calibration_standard['BCA']['int'],calibration_standard['BCA']['slope'])) )
+    elif type(bl_subtract)==float:
+        df=df.assign(measurement_bg=df.measurement)
+        for idx in df[df.econc.notnull()].index:
+            df.loc[idx,'measurement_bg']=df.measurement.loc[idx]-bl_subtract
+        #df.loc[:,'measurement_bg']=df.measurement-bl_subtract#(pctrl_avg-calibration_standard['BCA']['int'])
+        df.loc[:,'wyield']=df.measurement_bg.apply(calc_well_yield,\
+                       args=((calibration_standard['BCA']['int'],calibration_standard['BCA']['slope'])) )
+
+    else:
+        df.loc[:,'wyield']=df.measurement.apply(calc_well_yield,\
                        args=((calibration_standard['BCA']['int'],calibration_standard['BCA']['slope'])) )
     return df
 #    else:

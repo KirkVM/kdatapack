@@ -225,7 +225,7 @@ class TecanPlate:
                       active_cols=[1,2,3,4,5,6,7,8,9,10,11,12],
                       skipwells=[],repeat_measurements=[],itermethod='by_row',
                       enames=None,econcs=None,snames=None,sconcs=None,standardnames=None,standardconcs=None,
-                      rxnphs=None,rxntemps=None,rxntimes=None,buffernames=None,
+                      rxnphs=None,rxntemps=None,rxntimes=None,buffernames=None,rxnvols=None,
                       predvlp_dlnfactors=None,postdvlp_dlnfactors=None,sbarcodes=None):
         """
         Keyword arguments:
@@ -246,6 +246,7 @@ class TecanPlate:
         rxntemps: list of float rxn temp vals (default = None)
         rxntimes: list of float rxn time vals (default = None)
         buffernames: list of str buffer names (default = None)
+        rxnvols: list of float rxnvols (default = None)
         predvlp_dlnfactors: list of dilution factor before develop step (default = None)
         postdvlp_dlnfactors: list of dilution factor post develop step (default = None)
         """
@@ -261,6 +262,7 @@ class TecanPlate:
         varied_dict={'ename':enames,'econc':econcs,'sname':snames,'sconc':sconcs,
                      'standardname':standardnames,'standardconc':standardconcs,
                      'rxnph':rxnphs,'rxntemp':rxntemps,'rxntime':rxntimes,'buffername':buffernames,
+                     'rxnvol':rxnvols,
                      'predvlp_dlnfactor':predvlp_dlnfactors,'postdvlp_dlnfactor':postdvlp_dlnfactors,
                      'sbarcode':sbarcodes}
         for ckey in list(varied_dict.keys()):
