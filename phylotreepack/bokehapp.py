@@ -155,6 +155,20 @@ def acfunc():
     ptree.leaf_cds.data['qcolor']=qclist#['Blue' for _ in range(len(leaf_source.data['species']))]
     ptree.leaf_cds.data['qfillalpha']=qfalist#[1.0 for _ in range(len(leaf_source.data['species']))]
 
+def accacfunc():
+    qclist=ptree.leaf_cds.data['qcolor'][:]
+    qfalist=ptree.leaf_cds.data['qfillalpha'][:]
+    for x,sp in enumerate(ptree.leaf_cds.data['gbacc']):
+        if sp==accacw.value:
+            qclist[x]='Green'
+            qfalist[x]=0.5
+#        else:
+#            qclist[x]=None
+#            qfalist[x]=0
+    ptree.leaf_cds.data['qcolor']=qclist#['Blue' for _ in range(len(leaf_source.data['species']))]
+    ptree.leaf_cds.data['qfillalpha']=qfalist#[1.0 for _ in range(len(leaf_source.data['species']))]
+
+
 def tcbfunc():
     tc=ptree.calc_treecoverage(dtcds.data['accs'])
     tccds.data={'tc':[tc]}
@@ -309,6 +323,10 @@ acw=AutocompleteInput(title='Organism name',\
     width=200,height=50)
 acw.on_change('value',lambda attr,old,new:acfunc())
 
+accacw=AutocompleteInput(title='Accession',\
+    completions=ptree.leaf_cds.data['gbacc'][:],width=200,height=50)
+accacw.on_change('value',lambda attr,old,new:accacfunc())
+
 
 if len(sys.argv)>3:
     preselfpath=os.path.join(os.environ['SCIENCEDIR'],'GHSeqs',ghfam.upper(),sys.argv[3])
@@ -350,7 +368,7 @@ p2.ygrid.visible=False
 
 
 #layout=column(row(column(dtbl,sfms),column(pms,cms),column(gms,acw),column(row(psb,tcb),row(tltbl,tctbl))),row(p1,p2))
-layout=column(row(column(dtbl,sfms),column(pms,cms),column(gms,kms,acw),column(row(psb,tcb),row(tltbl,tctbl))),row(p1,p2))
+layout=column(row(column(dtbl,sfms),column(pms,cms),column(gms,kms,acw),column(row(psb,tcb),row(tltbl,tctbl),row(accacw))),row(p1,p2))
 #layout=row(p1,p2)
 curdoc().add_root(layout)
 #superq=p1.quad(left='nodebox_lefts',right='nodebox_rights',bottom='nodebox_bottoms',top='nodebox_tops',fill_alpha='qfillalpha',fill_color='qcolor',line_alpha=0,\
