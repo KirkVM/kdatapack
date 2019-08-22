@@ -18,7 +18,7 @@ class expdetails:
     cell_volume: float
 @dataclass
 class injection:
-    injum:float
+    injnum:float
     injvol:float
     injtime:float
     ltoti:float
@@ -41,6 +41,7 @@ def readitc(fpathstr):
     """
     with open(fpathstr,'r') as f:
         lines=f.readlines()
+    #scan through file-- looking for injection details in header section
     injectspecs=[]
     injRE=re.compile('\$\s+([\d.]+)\s+,\s+([\d.]+)\s+,\s+([\d.]+)\s+,\s+([\d.]+)\s+')
     for lnum,l in enumerate(lines):
@@ -48,6 +49,7 @@ def readitc(fpathstr):
         if not injobj: continue
         injectspecs.append(injectspec(*[float(x) for x in injobj.groups()],lnum))
         assert (len(injectspecs)==lnum-injectspecs[0].lnum+1),'missed an injection row!'
+    #scan through file-- looking for expdetails in header section (currently just syrconc,mconc,cellvol)
     expdRE=re.compile('#\s+([\d.]+)\s+')
     expdvals=[]
     for lnum,l in enumerate(lines):
@@ -56,6 +58,7 @@ def readitc(fpathstr):
         if expdobj:
             expdvals.append(expdobj.group(1))
     expd=expdetails(*[float(x)*1e-3 for x in [expdvals[1],expdvals[2],expdvals[3]] ])
+    #now scan through file and find lines indicating a new injection (start with '@')
     inj_initRE=re.compile('@(\d+)(,([\d.]+),([\d.]+)){0,1}')
     injection_primers=[]
     for lnum,l in enumerate(lines):
@@ -68,15 +71,15 @@ def readitc(fpathstr):
             injtime=float(iiobj.group(4))
         injection_primers.append([injnum,inj_startlnum,inj_stoplnum,injvol,injtime])
     injection_primers[-1][2]=lnum+1
-#    print(expd)
     all_seconds=[]
     all_power=[]
     ltoti=0
     mtoti=expd.cell_mstartconc
     syrconc=expd.syringe_lconc
     vo=expd.cell_volume
-    injdataRE=re.compile('([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+)\s+')
+    injdataRE=re.compile('([\d.-]+),([\d.-]+),([\d.-]+)(,([\d.-]+),([\d.-]+),([\d.-]+),([\d.-]+)\s+)*')
     injections=[]
+    #injection primers gives line locations for injection data
     for ip in injection_primers:
         cur_seconds=[]
         cur_power=[]
@@ -99,7 +102,6 @@ def readitc(fpathstr):
         else:
             new_injection=injection(0,None,None,None,None,None,None,\
                           np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
-            #calc_htot
             injections.append(new_injection)
 #    for injecty in injections:
 #        print(injecty)

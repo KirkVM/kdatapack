@@ -59,7 +59,6 @@ class ITCDataset:
         self.injections=injections
         self.syrconc=expdetails.syringe_lconc
         self.vo=expdetails.cell_volume
-        self.xsheats=None
         self.ltotis=None
         self.ltotfs=None
         self.mtotis=None
@@ -92,46 +91,4 @@ class ITCDataset:
                         self.mtotis[injidx]*self.fitMact,self.mtotfs[injidx]*self.fitMact,self.syrconc,self.injvols[injidx],self.vo)
             fit_ndhs.append(fit_ndh)
         self.fit_ndhs=fit_ndhs
-
-
-
-
-#	bTerm=-1-activeLigtoti/(activeMactoti)-1/(ts.coefw[0]*(activeMactoti))
-#	squareTerm=bTerm^2 - 4*activeLigtoti/(activeMactoti)
-#	thetai=0.5*(-bTerm - sqrt(squareTerm))
-#	bTerm=-1-activeLigtotf/(activeMactotf)-1/(ts.coefw[0]*(activeMactotf))
-#	squareTerm=bTerm^2 - 4*activeLigtotf/(activeMactotf)
-#	thetaf=0.5*(-bTerm - sqrt(squareTerm))
-#	ts.myHeat = (ts.coefw[1]/(ts.syringe*ts.inject))*ts.vo*(thetaf*(activeMactotf) - thetai*(activeMactoti))
-#	ts.myHeat +=0.5*(ts.coefw[1]/(ts.syringe*ts.inject))*ts.inject*(thetaf*(activeMactotf)+thetai*(activeMactoti))
-#	ts.myBaseline=ts.coefw[3]*ts.ligtotf/ts.mactotf+ts.coefw[4]
-
-
-#	ts.myHeat = (ts.coefw[1]/(ts.syringe*ts.inject))*ts.vo*(thetaf*(activeMactotf) - thetai*(activeMactoti))
-#	ts.myHeat +=0.5*(ts.coefw[1]/(ts.syringe*ts.inject))*ts.inject*(thetaf*(activeMactotf)+thetai*(activeMactoti))
-#	ts.myBaseline=ts.coefw[3]*ts.ligtotf/ts.mactotf+ts.coefw[4]
-
-#        #weird taht inject specs does not go past line 50 in header section?...so this can fail
-#        if injnum!=0:
-#            assert ( float(iiobj.group(3))== injectspecs[injnum-1].injvol)
-
-#        print(iiobj.groups())
-#    print(injectspecs)
-#    print(expd)
-            
-        
-  
-    
-    #def get_ftots(ltoti,mtoti,expd,injspec):
-#   moddy=expd.cell_volume-0.5*injspec.injvol)/(expd.cell_volume+0.5*injspec)
-#		Variable moddy=(ts.vo-0.5*ts.inject)/(ts.vo+0.5*ts.inject)
-#		ts.mactot[counts]=ts.mactot[counts-1]*moddy
-#		ts.ligtot[counts]=(ts.vo*ts.ligtot[counts-1]+ts.inject*ts.syringe)/ts.vo
-#		ts.ligtot[counts]*=moddy
-
-
-
-#def do11fit(injections):
-
-#        all_seconds.append[ip]
 

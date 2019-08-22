@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter,OrderedDict
 import pandas as pd
 import numpy as np
 import random
@@ -94,21 +94,28 @@ def optimize_codon_frequencies(dnaseq):
     newdnaseq=Seq(newdnastr,alphabet=generic_dna)
     return newdnaseq
  
-def reduce_gc_frequency(dnaseq):
+def reduce_gc_frequency(dnaseq,codonskipfreq=0):
     ''' reduces GC-content in a protein-coding DNA sequence
 
     Arguments:
         dnaseq: biopython DNA sequence
+    Keyword arguments:
+        codonskipfreq: number of codons to skip (default=0,optimize all freqs)
     Returns:
         newdnaseq: biopython DNA sequence with GC content reduced as defined
                     in get_reducedgc_codon
     '''
  
     newdnastr=''
+#    if codonskips==0:
+    step_size=(1+codonskipfreq)*3
     for codonposition in range(0,len(dnaseq),3):
         cdnseq=dnaseq[codonposition:codonposition+3]
-        newcdnstr=get_reducedgc_codon(str(cdnseq))
-        newdnastr+=newcdnstr
+        if codonposition%((1+codonskipfreq)*3)==0:
+            newcdnstr=get_reducedgc_codon(str(cdnseq))
+            newdnastr+=newcdnstr
+        else:
+            newdnastr+=str(cdnseq)
     newdnaseq=Seq(newdnastr,alphabet=generic_dna)
     return newdnaseq    
 
@@ -121,3 +128,28 @@ def get_avg_freq(dnaseq):
         cdnfreq=cdnrow['freq'].iloc[0]
         freqs.append(cdnfreq)
     return(np.mean(freqs))
+
+def get_longest_repeat(dnaseq,rlen=3):
+    cdict=OrderedDict()
+    lastcodon=''
+    lastcount=1
+    dnastr=str(dnaseq)
+    for cpos in range(0,len(dnastr),rlen):
+        newcodon=dnastr[cpos:cpos+rlen]
+        if newcodon!=lastcodon and lastcodon!='':
+            cdict[cpos-rlen*lastcount]=[lastcodon,lastcount]
+            lastcount=1
+        elif newcodon==lastcodon:
+            lastcount+=1
+
+        lastcodon=newcodon
+        if cpos==len(dnastr)-rlen:
+            cdict[cpos-rlen*(lastcount-1)]=[lastcodon,lastcount]    
+    max_repeat=0
+    max_codon=None
+    for k,v in cdict.items():
+        if v[1]>max_repeat:
+            max_repeat=v[1]
+            max_codon_key=k
+    if max_repeat>=5:
+        print(f'****repeat problem???*****, {cdict[max_codon_key][1]} repeats of {cdict[max_codon_key][0]} at position {max_codon_key}')
