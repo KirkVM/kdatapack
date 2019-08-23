@@ -1,6 +1,7 @@
 import scipy,math
-from scipy import optimize
 import numpy as np
+import pandas as pd
+from scipy import optimize
 from dataclasses import dataclass
 from typing import Iterable
 from dfitlib import fitmodels
@@ -56,9 +57,11 @@ def itc_l2lossfunc(kdatup,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):#lt
 class ITCDataset:
     def __init__(self,expdetails,injections):
         self.expdetails=expdetails
-        self.injections=injections
+#        self.injections=[x for x in injections if x.injvol is not None]
+        self.injections=injections#[x for x in injections if x.injvol is not None]
         self.syrconc=expdetails.syringe_lconc
         self.vo=expdetails.cell_volume
+        self.tracedf=None#pd.fromdict('')
         self.ltotis=None
         self.ltotfs=None
         self.mtotis=None
@@ -69,6 +72,17 @@ class ITCDataset:
         self.fitDelH=None
         self.fitMact=None
         self.fit_ndhs=None
+        self.build_tracedf()
+    def build_tracedf(self):
+        tracedfs=[]
+        for injection in self.injections:
+            numpnts=len(injection.seconds)
+            injdict={'injnum':[injection.injnum for _ in range(numpnts)],
+                     'injvol':[injection.injvol for _ in range(numpnts)],
+                     'seconds':injection.seconds,'seconds_total':injection.seconds_total,\
+                     'power':injection.power,'xs_power':injection.power[:]}
+            tracedfs.append(pd.fromdict(injdict))
+        self.tracedf=pd.concat(tracedfs,ignore_index=True)
     def create_titration_dataset(self):
         self.xs_heats=np.array([calc_xsheat(x) for x in self.injections[1:]])
         self.ltotis=np.array([x.ltoti for x in self.injections[1:]])
