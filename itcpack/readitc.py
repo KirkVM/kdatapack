@@ -21,6 +21,15 @@ class injection:
     injnum:float
     injvol:float
     injtime:float
+    seconds_total:Iterable
+    seconds:Iterable
+    power:Iterable
+
+@dataclass
+class injection_old:
+    injnum:float
+    injvol:float
+    injtime:float
     ltoti:float
     ltotf:float
     mtoti:float
@@ -28,6 +37,7 @@ class injection:
     seconds_total:Iterable
     seconds:Iterable
     power:Iterable
+
 
 def readitc(fpathstr):
     """
@@ -94,13 +104,17 @@ def readitc(fpathstr):
             moddy=(vo-0.5*ip[3])/(vo+0.5*ip[3])
             mtotf=mtoti*moddy
             ltotf=moddy*(vo*ltoti + ip[3]*syrconc)/vo
-            new_injection=injection(ip[0],ip[3],ip[4],ltoti,ltotf,mtoti,mtotf,\
+            #new_injection=injection(ip[0],ip[3],ip[4],ltoti,ltotf,mtoti,mtotf,\
+            #              np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
+            new_injection=injection(ip[0],ip[3],ip[4],\
                           np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             injections.append(new_injection)
             ltoti=ltotf
             mtoti=mtotf
         else:
-            new_injection=injection(0,None,None,None,None,None,None,\
+            #new_injection=injection(0,None,None,None,None,None,None,\
+            #              np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
+            new_injection=injection(0,None,None,\
                           np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             injections.append(new_injection)
 #    for injecty in injections:
