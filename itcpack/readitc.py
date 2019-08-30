@@ -2,6 +2,7 @@ import re,sys
 import numpy as np
 from dataclasses import dataclass
 from typing import Iterable
+from pathlib import Path
 from itcpack import fititc
 
 @dataclass  
@@ -24,20 +25,6 @@ class injection:
     seconds_total:Iterable
     seconds:Iterable
     power:Iterable
-
-@dataclass
-class injection_old:
-    injnum:float
-    injvol:float
-    injtime:float
-    ltoti:float
-    ltotf:float
-    mtoti:float
-    mtotf:float
-    seconds_total:Iterable
-    seconds:Iterable
-    power:Iterable
-
 
 def readitc(fpathstr):
     """
@@ -104,29 +91,34 @@ def readitc(fpathstr):
             moddy=(vo-0.5*ip[3])/(vo+0.5*ip[3])
             mtotf=mtoti*moddy
             ltotf=moddy*(vo*ltoti + ip[3]*syrconc)/vo
-            #new_injection=injection(ip[0],ip[3],ip[4],ltoti,ltotf,mtoti,mtotf,\
-            #              np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             new_injection=injection(ip[0],ip[3],ip[4],\
                           np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             injections.append(new_injection)
             ltoti=ltotf
             mtoti=mtotf
         else:
-            #new_injection=injection(0,None,None,None,None,None,None,\
-            #              np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             new_injection=injection(0,None,None,\
                           np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             injections.append(new_injection)
-#    for injecty in injections:
-#        print(injecty)
 
     itcd=fititc.ITCDataset(expd,injections)
+    return expd,injections
+
+def loaditc(fpathstr,fdir=None,cachedfpathdir='same',cachedfpathname='saved_itc.thermodynamics'):
+    '''runs readitc and returns an ITCDataset'''
+    if fdir is not None:
+        fpath=Path(fdir)
+        fpath=fpath / fpathstr
+    else:
+        fpath=Path(fpathstr)
+    expdeets,injections=readitc(fpath)
+    #now look for an existing
+    #filename=fpath.name
+
+    if cachedfpathdir=='same':
+        cachedfpath=fpath.parent / cachedfpathname
+    if cachedfpath.exists():
+        print('hey there')
+    else:
+        itcd=fititc.ITCDataset(expdeets,injections)
     return itcd
-#        if ip[0]!=0
-#			Variable moddy=(ts.vo-0.5*ts.inject)/(ts.vo+0.5*ts.inject)
-#			ts.mactot[counts]=ts.mactot[counts-1]*moddy
-#			ts.ligtot[counts]=(ts.vo*ts.ligtot[counts-1]+ts.inject*ts.syringe)/ts.vo
-#			ts.ligtot[counts]*=moddy
-			
-       
-        

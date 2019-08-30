@@ -1,4 +1,4 @@
-import scipy,math,sklearn
+import scipy,math,sklearn,pickle
 import numpy as np
 import pandas as pd
 from scipy import optimize
@@ -7,22 +7,23 @@ from typing import Iterable
 from sklearn import linear_model
 from sklearn.preprocessing import PolynomialFeatures
 from dfitlib import fitmodels
+from itcpack import itcpeaks
+
+import ipywidgets
+from ipywidgets import TwoByTwoLayout,GridspecLayout,Button
+#def make_makefixy(itcd):
+#    gs = GridspecLayout(16, 20)
+#    button=Button()
+#    button.on_click(on_button_clicked)
+#    gs[0,0]=Button()
+#    gs[1:,:]=myfig2
+#gs
 
 def linear_lossfunc(tup,xs,ys):
     inty,slopey=tup
     estimates= slopey*xs+inty
     delta = estimates - ys
     return np.dot(delta, delta) 
-
-def calc_xsheat(inj):
-    '''subtract baseline as linear fit to injection.power[0]-avg(injection.power[-6:-1])'''
-    fpoints=np.array([inj.power[0],np.average(inj.power[-6:-1])])
-    blinesecs=np.array([inj.seconds[0],inj.seconds[-1]])
-    fstats=scipy.optimize.minimize(linear_lossfunc,(fpoints[0],0),args=(blinesecs,fpoints))
-    powerbline=fstats.x[0]+fstats.x[1]*np.array(inj.seconds)
-    xspower=np.array(inj.power)-powerbline
-    xsheat=1e-6*np.sum(xspower*(inj.seconds[-1]/len(inj.seconds)))
-    return xsheat
 
 def itc_heats_prediction(Ka,DelH,ltoti,ltotf,mtoti,mtotf,syrconc,injvol,vo):
     bTerm=-1-ltoti/mtoti- 1/(Ka*mtoti)
@@ -58,28 +59,19 @@ def itc_l2lossfunc(kdatup,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):#lt
 #from sklearn.linear_model import Ridge
 
 #def polybl_fitandsubtract(fulltrace,xblpoints,yblpoints):
+#button = widgets.Button(description="Click Me!")
+output = ipywidgets.Output()
 
-class ITCInjectionPeak:
-    def __init__(self,seconds,power,smooth_powerbl,xs_power,xsbl):
-        self.seconds=seconds
-        self.power=power
-        self.smooth_powerbl=smooth_powerbl
-        self.xs_power=xs_power
-        self.power_baseline=xsbl
-        self.int_start=self.seconds[0]
-        self.int_stop=self.seconds[-1]
-        self.raw_heat=0.0
-        self.calc_raw_heat()
-    def calc_raw_heat(self):
-        start_index=list(self.seconds).index(self.int_start)
-        stop_index=list(self.seconds).index(self.int_stop)
-        xs_power_forint=np.sum(self.xs_power[start_index:stop_index+1]-\
-                        self.power_baseline[start_index:stop_index+1])
-        #xs_power_forint=np.sum(self.xs_power[start_index:stop_index+1])
-#        print(xs_power_forint)
-        self.raw_heat=1e-6*xs_power_forint*((self.int_stop-self.int_start)/(stop_index-start_index))
-#        print(self.int_start,self.int_stop,self.raw_heat)
-         
+#display(button, output)
+
+def on_button_clicked(b):
+    b.description='hi'
+    with output:
+        print("Button clicked.")
+
+#button.on_click(on_button_clicked)
+#def on_button_clicked(b):
+
 class ITCDataset:
     def __init__(self,expdetails,injections):
         self.expdetails=expdetails
@@ -97,7 +89,36 @@ class ITCDataset:
         self.fit_DelH=None
         self.fit_stoich=None
         self.build_tracedf()
+        #fields for figure...
+        self.gs=None
+        self.fbutton=None
+        self.peak_figs=None
+        self.peak_figs_idx=-1
 #        self.get_xs()
+    def build_interactive(self,start_injnum=1):
+        self.peak_figs=[itcpeaks.make_guided_figure(self.injection_peaks[x],injnum=x+1) for x in range(len(self.injection_peaks))]
+        self.gs = GridspecLayout(16, 20)
+        self.rbutton=Button(description='<')
+        self.rbutton.on_click(self.on_rbutton_clicked)
+        self.gs[0,0]=self.rbutton
+
+        self.fbutton=Button(description='>')
+        self.fbutton.on_click(self.on_fbutton_clicked)
+        self.gs[0,1]=self.fbutton
+#        self.gs[1,0]=output
+        self.gs[1:,:]=self.peak_figs[start_injnum-1]
+        self.peak_figs_idx=start_injnum-1
+        return self.gs
+    
+    def on_rbutton_clicked(self,b):
+        if self.peak_figs_idx>0:
+            self.peak_figs_idx-=1
+            self.gs[1:,:]=self.peak_figs[self.peak_figs_idx]
+
+    def on_fbutton_clicked(self,b):
+        if self.peak_figs_idx<len(self.injection_peaks):
+            self.peak_figs_idx+=1
+            self.gs[1:,:]=self.peak_figs[self.peak_figs_idx]
 
     def build_tracedf(self):
         tracedfs=[]
@@ -171,7 +192,7 @@ class ITCDataset:
                 clf.fit(xtarr,np.expand_dims(ypoints,1))
                 start_xsbl=clf.predict(poly.fit_transform(np.expand_dims(tracegrp[1].seconds.values,1)))
                 #done getting approx
-                self.injection_peaks.append(ITCInjectionPeak(tracegrp[1].seconds.values,tracegrp[1].power.values,\
+                self.injection_peaks.append(itcpeaks.ITCInjectionPeak(tracegrp[1].seconds.values,tracegrp[1].power.values,\
                                                     tracegrp[1].smooth_powerbl.values,tracegrp[1].xs_power.values,start_xsbl[:,0]))
                 moddy=(self.vo-0.5*cur_injdetail.injvol)/(self.vo+0.5*cur_injdetail.injvol)
                 mtotf=mtoti*moddy
@@ -205,3 +226,8 @@ class ITCDataset:
             fit_ndhs.append(fit_ndh)
         self.fit_ndhs=fit_ndhs
 
+    def store_file(self):
+        '''stores key data about titration'''
+        pkl_tracedf=self.tracedf.pickle
+        pkl_df=self.tracedf.pickle
+        smooth_powerbl=self.smooth_powerbl
