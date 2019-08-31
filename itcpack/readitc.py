@@ -101,10 +101,11 @@ def readitc(fpathstr):
                           np.array(cur_seconds),np.array(cur_seconds)-cur_seconds[0],np.array(cur_power))
             injections.append(new_injection)
 
-    itcd=fititc.ITCDataset(expd,injections)
+    #itcd=fititc.ITCDataset(expd,injections)
     return expd,injections
 
-def loaditc(fpathstr,fdir=None,cachedfpathdir='same',cachedfpathname='saved_itc.thermodynamics'):
+#def loaditc(fpathstr,fdir=None,cachedfpathdir='same',cachedfpathname='saved_itc.thermodynamics'):
+def loaditc(fpathstr,fdir=None,cachedfpathdir='itc_saved_files'):#,cachedfpathname='saved_itc.thermodynamics'):
     '''runs readitc and returns an ITCDataset'''
     if fdir is not None:
         fpath=Path(fdir)
@@ -115,10 +116,10 @@ def loaditc(fpathstr,fdir=None,cachedfpathdir='same',cachedfpathname='saved_itc.
     #now look for an existing
     #filename=fpath.name
 
-    if cachedfpathdir=='same':
-        cachedfpath=fpath.parent / cachedfpathname
+    #if cachedfpathdir=='same':
+    cachedfpath=fpath.parent / cachedfpathdir / f'pkl_{fpath.name}'
     if cachedfpath.exists():
         print('hey there')
     else:
-        itcd=fititc.ITCDataset(expdeets,injections)
+        itcd=fititc.ITCDataset(expdeets,injections,fpath.name)
     return itcd

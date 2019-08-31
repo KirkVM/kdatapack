@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable
 from sklearn import linear_model
 from sklearn.preprocessing import PolynomialFeatures
+from pathlib import Path
 from dfitlib import fitmodels
 from itcpack import itcpeaks
 
@@ -73,12 +74,13 @@ def on_button_clicked(b):
 #def on_button_clicked(b):
 
 class ITCDataset:
-    def __init__(self,expdetails,injections):
+    def __init__(self,expdetails,injections,fname):
         self.expdetails=expdetails
         self.syrconc=expdetails.syringe_lconc
         self.vo=expdetails.cell_volume
         self.mtot0=expdetails.cell_mstartconc
         self.injection_details=injections #this includes pre-inject baseline
+        self.fname=fname
         self.injection_peaks=[] #this will not include pre-inject baseline
         self.tracedf=None
         self.titrationdf=None
@@ -94,7 +96,8 @@ class ITCDataset:
         self.fbutton=None
         self.peak_figs=None
         self.peak_figs_idx=-1
-#        self.get_xs()
+        self.get_xspower()
+
     def build_interactive(self,start_injnum=1):
         self.peak_figs=[itcpeaks.make_guided_figure(self.injection_peaks[x],injnum=x+1) for x in range(len(self.injection_peaks))]
         self.gs = GridspecLayout(16, 20)
@@ -105,6 +108,10 @@ class ITCDataset:
         self.fbutton=Button(description='>')
         self.fbutton.on_click(self.on_fbutton_clicked)
         self.gs[0,1]=self.fbutton
+        
+        self.svbutton=Button(description='save changes')
+        self.svbutton.on_click(self.on_svbutton_clicked)
+        self.gs[0,8]=self.svbutton
 #        self.gs[1,0]=output
         self.gs[1:,:]=self.peak_figs[start_injnum-1]
         self.peak_figs_idx=start_injnum-1
@@ -119,6 +126,14 @@ class ITCDataset:
         if self.peak_figs_idx<len(self.injection_peaks):
             self.peak_figs_idx+=1
             self.gs[1:,:]=self.peak_figs[self.peak_figs_idx]
+
+    def on_svbutton_clicked(self,b):
+        for injpk in self.injection_peaks:
+            injpk.save_guided_bl()
+        self.titrationdf.xs_heat.loc[:]=[x.xs_heat for x in self.injection_peaks]
+        #self.titrationdf=self.titrationdf.assign(ndh=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol))
+        self.titrationdf.ndh.loc[:]=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol)
+        #self.update_heats([x.heat for x in self.injection_peaks])
 
     def build_tracedf(self):
         tracedfs=[]
@@ -171,7 +186,6 @@ class ITCDataset:
         self.tracedf.xs_power=self.tracedf.power-self.tracedf.smooth_powerbl
 
     def create_titration_dataset(self):
-        self.get_xspower()
 #        trcgrps=self.tracedf.groupby('injnum')
         mtotis=[];mtotfs=[];ltotis=[];ltotfs=[];injvols=[];xs_heats=[]
         injdidx=0
@@ -199,7 +213,7 @@ class ITCDataset:
                 ltotf=moddy*(self.vo*ltoti + cur_injdetail.injvol*self.syrconc)/self.vo
                 mtotis.append(mtoti);mtotfs.append(mtotf)
                 ltotis.append(ltoti);ltotfs.append(ltotf)
-                xs_heats.append(self.injection_peaks[-1].raw_heat)
+                xs_heats.append(self.injection_peaks[-1].xs_heat)
                 injvols.append(cur_injdetail.injvol)
                 mtoti=mtotf
                 ltoti=ltotf
@@ -209,8 +223,10 @@ class ITCDataset:
                                                 'xs_heat':xs_heats,'injvol':injvols})
         self.titrationdf=self.titrationdf.assign(lmratio=self.titrationdf.ltotf/self.titrationdf.mtotf,
                                                  ndh=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol))
-
-#       self.lmratio=self.ltotfs/self.mtotfs
+#    def update_heats(self,xs_heats):
+#        self.titrationdf.xs_heats=xs_heats
+#        self.titrationdf=self.titrationdf.assign(ndh=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol))
+##       self.lmratio=self.ltotfs/self.mtotfs
 #        self.ndh_heats=self.xs_heats/(self.syrconc*self.injvols)#np.array([calc_xsheat(x) for x in self.injections[1:]])
     def convenience_fit(self,Ka=1e5,DelH=-4000,Mact=1.0):
         fitvals=scipy.optimize.minimize(itc_l2lossfunc,(Ka,DelH,Mact),args=\
@@ -226,8 +242,22 @@ class ITCDataset:
             fit_ndhs.append(fit_ndh)
         self.fit_ndhs=fit_ndhs
 
-    def store_file(self):
-        '''stores key data about titration'''
-        pkl_tracedf=self.tracedf.pickle
-        pkl_df=self.tracedf.pickle
-        smooth_powerbl=self.smooth_powerbl
+#    def store_file(self):
+#        '''stores key data about titration'''
+#        pkl_tracedf=self.tracedf.pickle
+#        pkl_df=self.tracedf.pickle
+#        smooth_powerbl=self.smooth_powerbl
+#    
+#    def pickle_itcd(self,fpathstr='itc_saved_files'):
+#        pklpath=Path(fpathstr) 
+#        pklpath = pklpath / f'pkl_{self.fname}'
+#        with open(pklpath,'w') as f:
+#            pickle.dump(self,f)
+#
+    
+    def store_itcdata(self,fdirpathstr='itc_saved_data'):
+        datapath=Path(fdirpathstr) 
+        datapath = datapath / f'data_{self.fname}'
+        #dump key data to json...
+#        with open(datapath,'w') as f:
+#            pickle.dump(self,f)
