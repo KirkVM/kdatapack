@@ -105,7 +105,7 @@ def readitc(fpathstr):
     return expd,injections
 
 #def loaditc(fpathstr,fdir=None,cachedfpathdir='same',cachedfpathname='saved_itc.thermodynamics'):
-def loaditc(fpathstr,fdir=None,cachedfpathdir='itc_saved_files'):#,cachedfpathname='saved_itc.thermodynamics'):
+def loaditc(fpathstr,fdir=None,cachedfpathdir='itc_saved_data',reset_titration=False):#,cachedfpathname='saved_itc.thermodynamics'):
     '''runs readitc and returns an ITCDataset'''
     if fdir is not None:
         fpath=Path(fdir)
@@ -117,9 +117,15 @@ def loaditc(fpathstr,fdir=None,cachedfpathdir='itc_saved_files'):#,cachedfpathna
     #filename=fpath.name
 
     #if cachedfpathdir=='same':
-    cachedfpath=fpath.parent / cachedfpathdir / f'pkl_{fpath.name}'
-    if cachedfpath.exists():
-        print('hey there')
+    itcd=fititc.ITCDataset(expdeets,injections,fpath.name)
+    cachedfpath=fpath.parent / cachedfpathdir / f'{fpath.stem}.json'
+    if cachedfpath.exists() and reset_titration==False:
+        itcd.extract_peaks()
+        itcd.update_with_stored_vals()
+        itcd.make_titrationdf()
     else:
-        itcd=fititc.ITCDataset(expdeets,injections,fpath.name)
+        itcd.get_xspower()
+        itcd.extract_peaks()
+        itcd.make_titrationdf()
+#    itcd.create_titration_data()
     return itcd

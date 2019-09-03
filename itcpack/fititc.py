@@ -1,4 +1,4 @@
-import scipy,math,sklearn,pickle
+import scipy,sklearn,json
 import numpy as np
 import pandas as pd
 from scipy import optimize
@@ -12,13 +12,6 @@ from itcpack import itcpeaks
 
 import ipywidgets
 from ipywidgets import TwoByTwoLayout,GridspecLayout,Button
-#def make_makefixy(itcd):
-#    gs = GridspecLayout(16, 20)
-#    button=Button()
-#    button.on_click(on_button_clicked)
-#    gs[0,0]=Button()
-#    gs[1:,:]=myfig2
-#gs
 
 def linear_lossfunc(tup,xs,ys):
     inty,slopey=tup
@@ -57,24 +50,9 @@ def itc_l2lossfunc(kdatup,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):#lt
 
     return np.dot(delta,delta)
 
-#from sklearn.linear_model import Ridge
-
-#def polybl_fitandsubtract(fulltrace,xblpoints,yblpoints):
-#button = widgets.Button(description="Click Me!")
-output = ipywidgets.Output()
-
-#display(button, output)
-
-def on_button_clicked(b):
-    b.description='hi'
-    with output:
-        print("Button clicked.")
-
-#button.on_click(on_button_clicked)
-#def on_button_clicked(b):
 
 class ITCDataset:
-    def __init__(self,expdetails,injections,fname):
+    def __init__(self,expdetails,injections,fname,fdirpathstr='itc_saved_data'):#,reset_titration=True):
         self.expdetails=expdetails
         self.syrconc=expdetails.syringe_lconc
         self.vo=expdetails.cell_volume
@@ -96,9 +74,14 @@ class ITCDataset:
         self.fbutton=None
         self.peak_figs=None
         self.peak_figs_idx=-1
-        self.get_xspower()
+#        if reset_titration:
+#            self.get_xspower()
 
-    def build_interactive(self,start_injnum=1):
+        self.stored_file_path=None
+        jfname=Path(self.fname).stem
+        self.stored_file_path=Path(fdirpathstr) / f'{jfname}.json'
+
+    def adjust_peaks(self,start_injnum=1):
         self.peak_figs=[itcpeaks.make_guided_figure(self.injection_peaks[x],injnum=x+1) for x in range(len(self.injection_peaks))]
         self.gs = GridspecLayout(16, 20)
         self.rbutton=Button(description='<')
@@ -112,7 +95,7 @@ class ITCDataset:
         self.svbutton=Button(description='save changes')
         self.svbutton.on_click(self.on_svbutton_clicked)
         self.gs[0,8]=self.svbutton
-#        self.gs[1,0]=output
+
         self.gs[1:,:]=self.peak_figs[start_injnum-1]
         self.peak_figs_idx=start_injnum-1
         return self.gs
@@ -132,7 +115,7 @@ class ITCDataset:
             injpk.save_guided_bl()
         self.titrationdf.xs_heat.loc[:]=[x.xs_heat for x in self.injection_peaks]
         #self.titrationdf=self.titrationdf.assign(ndh=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol))
-        self.titrationdf.ndh.loc[:]=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol)
+        self.titrationdf.ndh.loc[:]=self.titrationdf.xs_heat/(self.syrconc*self.lact*self.titrationdf.injvol)
         #self.update_heats([x.heat for x in self.injection_peaks])
 
     def build_tracedf(self):
@@ -185,16 +168,38 @@ class ITCDataset:
         self.tracedf=self.tracedf.assign(smooth_powerbl=prediction)
         self.tracedf.xs_power=self.tracedf.power-self.tracedf.smooth_powerbl
 
-    def create_titration_dataset(self):
-#        trcgrps=self.tracedf.groupby('injnum')
+    def make_titrationdf(self):
         mtotis=[];mtotfs=[];ltotis=[];ltotfs=[];injvols=[];xs_heats=[]
         injdidx=0
-        mtoti=self.mtot0
+        injnum=1
+        mtoti=self.mtot0*self.mact
+        syr_active=self.syrconc*self.lact
         ltoti=0.0
+        
+        for ival,injpeak in enumerate(self.injection_peaks):
+            assert(ival+1==injpeak.injnum)
+            moddy=(self.vo-0.5*injpeak.injvol)/(self.vo+0.5*injpeak.injvol)
+            mtotf=mtoti*moddy
+            ltotf=moddy*(self.vo*ltoti + injpeak.injvol*syr_active)/self.vo
+            mtotis.append(mtoti);mtotfs.append(mtotf)
+            ltotis.append(ltoti);ltotfs.append(ltotf)
+            injvols.append(injpeak.injvol)
+            mtoti=mtotf
+            ltoti=ltotf
+
+        xs_heats=[x.xs_heat for x in self.injection_peaks]#.append(self.injection_peaks[-1].xs_heat)
+        self.titrationdf=pd.DataFrame.from_dict({'mtoti':mtotis,'mtotf':mtotfs,'ltoti':ltotis,'ltotf':ltotfs,
+                                                'xs_heat':xs_heats,'injvol':injvols})
+        self.titrationdf=self.titrationdf.assign(lmratio=self.titrationdf.ltotf/self.titrationdf.mtotf,
+                                                 ndh=self.titrationdf.xs_heat/(syr_active*self.titrationdf.injvol))
+#        self.titrationdf.ndh.loc[:]=self.titrationdf.xs_heat/(syr_active*self.titrationdf.injvol)
+
+    def extract_peaks(self):
+        injidx=0
         prev_last5avg=self.tracedf.xs_power.iloc[0]
         for tracegrp in self.tracedf.groupby('injnum'):
             last5avg=tracegrp[1].xs_power.iloc[-5:].mean()
-            cur_injdetail=self.injection_details[injdidx]
+            cur_injdetail=self.injection_details[injidx]
             assert cur_injdetail.injnum==tracegrp[1].injnum.iloc[0]
             if np.isnan(tracegrp[1].injvol.iloc[0]) == False:
                 #get linear baseline approx to start with...
@@ -206,28 +211,13 @@ class ITCDataset:
                 clf.fit(xtarr,np.expand_dims(ypoints,1))
                 start_xsbl=clf.predict(poly.fit_transform(np.expand_dims(tracegrp[1].seconds.values,1)))
                 #done getting approx
-                self.injection_peaks.append(itcpeaks.ITCInjectionPeak(tracegrp[1].seconds.values,tracegrp[1].power.values,\
-                                                    tracegrp[1].smooth_powerbl.values,tracegrp[1].xs_power.values,start_xsbl[:,0]))
-                moddy=(self.vo-0.5*cur_injdetail.injvol)/(self.vo+0.5*cur_injdetail.injvol)
-                mtotf=mtoti*moddy
-                ltotf=moddy*(self.vo*ltoti + cur_injdetail.injvol*self.syrconc)/self.vo
-                mtotis.append(mtoti);mtotfs.append(mtotf)
-                ltotis.append(ltoti);ltotfs.append(ltotf)
-                xs_heats.append(self.injection_peaks[-1].xs_heat)
-                injvols.append(cur_injdetail.injvol)
-                mtoti=mtotf
-                ltoti=ltotf
-            injdidx+=1
+                curinjpeak=itcpeaks.ITCInjectionPeak(tracegrp[1].seconds.values,tracegrp[1].power.values,\
+                                        tracegrp[1].smooth_powerbl.values,tracegrp[1].xs_power.values,\
+                                        start_xsbl[:,0],cur_injdetail.injnum,cur_injdetail.injvol)
+                self.injection_peaks.append(curinjpeak)
             prev_last5avg=last5avg
-        self.titrationdf=pd.DataFrame.from_dict({'mtoti':mtotis,'mtotf':mtotfs,'ltoti':ltotis,'ltotf':ltotfs,
-                                                'xs_heat':xs_heats,'injvol':injvols})
-        self.titrationdf=self.titrationdf.assign(lmratio=self.titrationdf.ltotf/self.titrationdf.mtotf,
-                                                 ndh=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol))
-#    def update_heats(self,xs_heats):
-#        self.titrationdf.xs_heats=xs_heats
-#        self.titrationdf=self.titrationdf.assign(ndh=self.titrationdf.xs_heat/(self.syrconc*self.titrationdf.injvol))
-##       self.lmratio=self.ltotfs/self.mtotfs
-#        self.ndh_heats=self.xs_heats/(self.syrconc*self.injvols)#np.array([calc_xsheat(x) for x in self.injections[1:]])
+            injidx+=1
+
     def convenience_fit(self,Ka=1e5,DelH=-4000,Mact=1.0):
         fitvals=scipy.optimize.minimize(itc_l2lossfunc,(Ka,DelH,Mact),args=\
                 (self.ltotis[1:],self.ltotfs[1:],self.mtotis[1:],self.mtotfs[1:],self.injvols[1:],self.syrconc,self.vo,\
@@ -242,22 +232,84 @@ class ITCDataset:
             fit_ndhs.append(fit_ndh)
         self.fit_ndhs=fit_ndhs
 
-#    def store_file(self):
-#        '''stores key data about titration'''
-#        pkl_tracedf=self.tracedf.pickle
-#        pkl_df=self.tracedf.pickle
-#        smooth_powerbl=self.smooth_powerbl
-#    
-#    def pickle_itcd(self,fpathstr='itc_saved_files'):
-#        pklpath=Path(fpathstr) 
-#        pklpath = pklpath / f'pkl_{self.fname}'
-#        with open(pklpath,'w') as f:
-#            pickle.dump(self,f)
-#
     
     def store_itcdata(self,fdirpathstr='itc_saved_data'):
-        datapath=Path(fdirpathstr) 
-        datapath = datapath / f'data_{self.fname}'
-        #dump key data to json...
-#        with open(datapath,'w') as f:
-#            pickle.dump(self,f)
+        store_dict={}
+
+        store_dict['syrconc']=self.syrconc
+        store_dict['vo']=self.vo
+        store_dict['mtot0']=self.mtot0
+        store_dict['mact']=self.mact
+        store_dict['lact']=self.lact
+        store_dict['fit_Ka']=self.fit_Ka
+        store_dict['fit_DelH']=self.fit_DelH
+        store_dict['fit_stoich']=self.fit_stoich
+        store_dict['xs_power']=self.tracedf.xs_power.values.tolist()
+        store_dict['smooth_powerbl']=self.tracedf.xs_power.values.tolist()
+
+        store_dict['injection_peaks']={}
+        for injpeak in self.injection_peaks:
+            store_dict['injection_peaks'][injpeak.injnum]={}
+            store_dict['injection_peaks'][injpeak.injnum]['final_intstart']=injpeak.final_intstart
+            store_dict['injection_peaks'][injpeak.injnum]['final_intstop']=injpeak.final_intstop
+            store_dict['injection_peaks'][injpeak.injnum]['final_xs_powerbl']=injpeak.final_xs_powerbl.tolist()
+            store_dict['injection_peaks'][injpeak.injnum]['xs_power']=injpeak.xs_power.tolist()
+            store_dict['injection_peaks'][injpeak.injnum]['seconds']=injpeak.seconds.tolist()
+            store_dict['injection_peaks'][injpeak.injnum]['guided_bp_seconds']=injpeak.guided_bp_seconds
+            store_dict['injection_peaks'][injpeak.injnum]['guided_bp_power']=injpeak.guided_bp_power
+            store_dict['injection_peaks'][injpeak.injnum]['guided_bp_indices']=injpeak.guided_bp_indices
+            store_dict['injection_peaks'][injpeak.injnum]['blsegs']=[]
+            for blseg in injpeak.blsegs:
+                curseg={}
+                curseg['x0']=blseg.x0
+                curseg['x1']=blseg.x1
+                curseg['y0']=blseg.y0
+                curseg['y1']=blseg.y1
+                curseg['seconds']=blseg.seconds.tolist()
+                curseg['blvals']=blseg.blvals.tolist()
+                store_dict['injection_peaks'][injpeak.injnum]['blsegs'].append(curseg)
+                #import pdb;pdb.set_trace()
+        with open(self.stored_file_path,'w') as f:
+            json.dump(store_dict,f)
+
+    def update_with_stored_vals(self):
+        store_dict={}
+        with open(self.stored_file_path,'r') as f:
+            store_dict=json.load(f)
+        self.tracedf.smooth_powerbl=np.array(store_dict['smooth_powerbl'])
+        self.tracedf.xs_power=np.array(store_dict['xs_power'])
+        self.syrconc=store_dict['syrconc']
+        self.vo=store_dict['vo']
+        self.mtot0=store_dict['mtot0']
+        self.mact=store_dict['mact']
+        self.lact=store_dict['lact']
+        self.fit_Ka=store_dict['fit_Ka']
+        self.fit_DeH=store_dict['fit_DelH']
+        self.fit_stoich=store_dict['fit_stoich']
+        for injpeak in self.injection_peaks:
+            stored_peak_dict=store_dict['injection_peaks'][str(injpeak.injnum)]
+            injpeak.final_intstart=stored_peak_dict['final_intstart']
+            injpeak.final_intstop=stored_peak_dict['final_intstop']
+            injpeak.guided_intstart=stored_peak_dict['final_intstart']
+            injpeak.guided_intstop=stored_peak_dict['final_intstop']
+            injpeak.final_xs_powerbl=np.array(stored_peak_dict['final_xs_powerbl'])
+            injpeak.xs_power=np.array(stored_peak_dict['xs_power'])
+            injpeak.seconds=np.array(stored_peak_dict['seconds'])
+#            injpeak.create_guided_bl()
+            cursegs=[]
+            for sblseg in stored_peak_dict['blsegs']:
+                bl_x0=sblseg['x0']
+                bl_x1=sblseg['x1']
+                bl_y0=sblseg['y0']
+                bl_y1=sblseg['y1']
+                bl_seconds=np.array(sblseg['seconds'])#.tolist()#=blseg.seconds.tolist()
+                bl_blvals=np.array(sblseg['blvals'])
+                curblseg=itcpeaks.Blsegment(bl_x0,bl_x1,bl_y0,bl_y1,bl_seconds,bl_blvals)
+                cursegs.append(curblseg)
+                injpeak.guided_bp_seconds=stored_peak_dict['guided_bp_seconds']
+                injpeak.guided_bp_power=stored_peak_dict['guided_bp_power']
+                injpeak.guided_bp_indices=stored_peak_dict['guided_bp_indices']
+            injpeak.blsegs=cursegs
+            injpeak.save_guided_bl()
+            injpeak.calc_xs_heat()
+        self.make_titrationdf()

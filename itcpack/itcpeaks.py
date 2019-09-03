@@ -23,7 +23,7 @@ def make_guided_figure(injpeak,injnum=1):
     flpr=bqplot.marks.FlexLine(x=injpeak.seconds,y=injpeak.xs_power,scales={'x':fsx,'y':fsy})
     blpts=bqplot.marks.Scatter(x=injpeak.guided_bp_seconds,y=injpeak.guided_bp_power,scales={'x':fsx,'y':fsy})
     rngpts=bqplot.marks.Scatter(x=[injpeak.guided_intstart,injpeak.guided_intstop],\
-                                y=[np.quantile(injpeak.init_xs_powerbl,0.25),np.quantile(injpeak.init_xs_powerbl,0.25)],\
+                                y=[np.quantile(injpeak.final_xs_powerbl,0.25),np.quantile(injpeak.final_xs_powerbl,0.25)],\
                                 scales={'x':fsx,'y':fsy},
                                 colors=['gold'],marker='rectangle',default_skew=0.99,default_size=400)
     bls=[]
@@ -48,7 +48,7 @@ def create_interp_line(x0,x1,y0,y1,seconds):
     clf = sklearn.linear_model.LinearRegression()
     clf.fit(xtarr,np.expand_dims([y0,y1],1))
     sec_tarr=poly.fit_transform(np.expand_dims(seconds,1))
-    return clf.predict(sec_tarr)
+    return clf.predict(sec_tarr)[:,0]
 
 @dataclass
 class Blsegment:
@@ -61,12 +61,15 @@ class Blsegment:
 
 
 class ITCInjectionPeak:
-    def __init__(self,seconds,power,smooth_powerbl,xs_power,xsbl):
+    def __init__(self,seconds,power,smooth_powerbl,xs_power,xsbl,injnum,injvol):
         self.seconds=seconds
         self.power=power
         self.smooth_powerbl=smooth_powerbl
         self.xs_power=xs_power
         self.init_xs_powerbl=xsbl
+        self.injnum=injnum
+        self.injvol=injvol
+
         self.init_intstart=self.seconds[0]
         self.init_intstop=self.seconds[-1]
         self.xs_heat=0.0
@@ -83,13 +86,14 @@ class ITCInjectionPeak:
         self.create_guided_bl()
         self.plot_bls=[]
         self.calc_xs_heat()
-        self.cool=None
-        self.dumb=None
     
     def save_guided_bl(self):
-        self.final_xs_powerbl=list(self.blsegs[0].blvals[:,0])
+        self.final_xs_powerbl=list(self.blsegs[0].blvals[:])
         for blseg in self.blsegs[1:]:
-            self.final_xs_powerbl.extend(blseg.blvals[1:,0])
+            self.final_xs_powerbl.extend(blseg.blvals[1:])
+        self.final_xs_powerbl=np.array(self.final_xs_powerbl)
+        #self.final_intstart=self.guided_intstart
+        #self.final_intstop=self.guided_intstop
         self.calc_xs_heat()
 
     def create_guided_bl(self):
@@ -106,10 +110,13 @@ class ITCInjectionPeak:
             y1=self.final_xs_powerbl[self.guided_bp_indices[curidx]]
             segseconds=self.seconds[self.guided_bp_indices[curidx-1]:self.guided_bp_indices[curidx]+1]
             segline=create_interp_line(x0,x1,y0,y1,segseconds)
+#            import pdb;pdb.set_trace()
             self.blsegs.append(Blsegment(x0,x1,y0,y1,segseconds,segline))            
     def calc_xs_heat(self):
         start_index=list(self.seconds).index(self.final_intstart)
         stop_index=list(self.seconds).index(self.final_intstop)
+#        if self.injnum==1:
+#            import pdb;pdb.set_trace()
         xs_power_forint=np.sum(self.xs_power[start_index:stop_index+1]-\
                         self.final_xs_powerbl[start_index:stop_index+1])
         self.xs_heat=1e-6*xs_power_forint*((self.final_intstop-self.final_intstart)/(stop_index-start_index))
