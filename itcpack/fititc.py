@@ -1,4 +1,4 @@
-import scipy,sklearn,json
+import scipy,sklearn,json,math
 import numpy as np
 import pandas as pd
 from scipy import optimize
@@ -7,6 +7,7 @@ from typing import Iterable
 from sklearn import linear_model
 from sklearn.preprocessing import PolynomialFeatures
 from pathlib import Path
+from lmfit import Parameters,minimize
 from dfitlib import fitmodels
 from itcpack import itcpeaks
 
@@ -19,7 +20,7 @@ def linear_lossfunc(tup,xs,ys):
     delta = estimates - ys
     return np.dot(delta, delta) 
 
-def itc_heats_prediction(Ka,DelH,ltoti,ltotf,mtoti,mtotf,syrconc,injvol,vo):
+def itc_heats_prediction(Ka,DelH,ltoti,ltotf,mtoti,mtotf,injvol,syrconc,vo):
     bTerm=-1-ltoti/mtoti- 1/(Ka*mtoti)
     squareTerm=np.power(bTerm,2) - 4*ltoti/mtoti
     thetai=0.5*(-bTerm - math.sqrt(squareTerm))
@@ -44,11 +45,34 @@ def itc_l2lossfunc(kdatup,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):#lt
     predicted_heats=[]
     for injidx in range(len(ltotis)):
         predicted_heat=itc_heats_prediction(Ka,DelH,ltoti_active[injidx],ltotf_active[injidx],\
-                        mtoti_active[injidx],mtotf_active[injidx],syrconc_active,injvols[injidx],vo)
+                        mtoti_active[injidx],mtotf_active[injidx],injvols[injidx],syrconc_active,vo)
         predicted_heats.append(predicted_heat)
     delta = [predheat - y for predheat,y in zip(predicted_heats,ys)]
 
     return np.dot(delta,delta)
+
+def itc_titration_residual(params,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):
+    Ka=params['Ka']
+    DelH=params['DelH']
+    Mact=params['Mact']
+    DilHeat=params['DilHeat']
+    ltoti_active=ltotis
+    ltotf_active=ltotfs
+    mtoti_active=mtotis*Mact
+    mtotf_active=mtotfs*Mact
+    syrconc=syrconc 
+    predicted_heats=[]
+
+    for injidx in range(len(ltotis)):
+        predicted_heat=itc_heats_prediction(Ka,DelH,ltoti_active[injidx],ltotf_active[injidx],\
+                        mtoti_active[injidx],mtotf_active[injidx],injvols[injidx],syrconc,vo)
+        predicted_heats.append(predicted_heat+DilHeat)
+#    print(ys-predicted_heats)
+    return ys-predicted_heats
+    #delta = [predheat - y for predheat,y in zip(predicted_heats,ys)]
+    #
+    #return np.dot(delta,delta)
+
 
 
 class ITCDataset:
@@ -68,6 +92,9 @@ class ITCDataset:
         self.fit_Ka=None
         self.fit_DelH=None
         self.fit_stoich=None
+        self.fit_DilHeat=None
+        self.fit_ndhs=None
+        self.fit_params=None
         self.build_tracedf()
         #fields for figure...
         self.gs=None
@@ -218,19 +245,51 @@ class ITCDataset:
             prev_last5avg=last5avg
             injidx+=1
 
+    def superfit(self,Ka=1e5,DelH=-4000,Mact=1.0,DilHeat=1000,pts='all'):
+        params = Parameters()
+        params.add('Ka', value=Ka,min=1e3)
+        params.add('DelH', value=DelH)
+        params.add('Mact', value=Mact,min=0.5,max=2.6)
+        params.add('DilHeat', value=DilHeat,min=-2000,max=2000)
+#        params.add('DilHeat', value=0,vary=False)#,min=-1000,max=1000)
+#        if pts=='all':
+#            itc_args=[self.ltotis[1:],self.ltotfs[1:],self.mtotis[1:],self.mtotfs[1:],\
+#                [x.injvol for x in self.injection_details[1:]],self.syrconc*self.lact,self.vo,\
+#                self.titrationdf.xs_heat.values[1:]]
+#        out = minimize(itc_titration_residual, params, args=(*itc_args))
+        fit_out = minimize(itc_titration_residual, params, \
+               args=(self.titrationdf.ltoti.values[1:],self.titrationdf.ltotf.values[1:],\
+                self.titrationdf.mtoti.values[1:],self.titrationdf.mtotf.values[1:],\
+                self.titrationdf.injvol.values[1:],self.syrconc*self.lact,self.vo,\
+                self.titrationdf.ndh.values[1:]) )
+        self.fit_params=fit_out.params
+        self.fit_Ka=fit_out.params['Ka'].value
+        self.fit_DelH=fit_out.params['DelH'].value
+        self.fit_stoich=fit_out.params['Mact'].value
+        self.fit_DilHeat=fit_out.params['DilHeat'].value
+#        print(params['Mact'])
+        return fit_out
+
+#def itc_titration_residual(params,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):
+
     def convenience_fit(self,Ka=1e5,DelH=-4000,Mact=1.0):
         fitvals=scipy.optimize.minimize(itc_l2lossfunc,(Ka,DelH,Mact),args=\
                 (self.ltotis[1:],self.ltotfs[1:],self.mtotis[1:],self.mtotfs[1:],self.injvols[1:],self.syrconc,self.vo,\
                  self.ndh_heats[1:]))
         print(fitvals)
         self.fitKa,self.fitDelH,self.fitMact=fitvals.x
+
     def create_fit_plot(self,numpnts=1000):
         fit_ndhs=[]
-        for injidx in range(len(self.ltotis)):
-            fit_ndh=itc_heats_prediction(self.fitKa,self.fitDelH,self.ltotis[injidx],self.ltotfs[injidx],\
-                        self.mtotis[injidx]*self.fitMact,self.mtotfs[injidx]*self.fitMact,self.syrconc,self.injvols[injidx],self.vo)
-            fit_ndhs.append(fit_ndh)
+        fit_lmratios=[]
+        for injidx in range(self.titrationdf.shape[0]):
+            fit_ndh=itc_heats_prediction(self.fit_Ka,self.fit_DelH,self.titrationdf.ltoti.values[injidx],\
+                    self.titrationdf.ltotf.values[injidx],self.titrationdf.mtoti.values[injidx]*self.fit_stoich,\
+                    self.titrationdf.mtotf.values[injidx]*self.fit_stoich,self.titrationdf.injvol.values[injidx],\
+                    self.syrconc,self.vo)
+            fit_ndhs.append(fit_ndh+self.fit_DilHeat)
         self.fit_ndhs=fit_ndhs
+#        self.fit_lmratios=self.titrationdf.ltotf.values/(self.titrationdf.mtotf.values*self.fit_stoich)
 
     
     def store_itcdata(self,fdirpathstr='itc_saved_data'):
