@@ -52,7 +52,7 @@ def itc_l2lossfunc(kdatup,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):#lt
     return np.dot(delta,delta)
 
 def itc_titration_residual(params,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):
-    Ka=params['Ka']
+    logKa=params['logKa']
     DelH=params['DelH']
     Mact=params['Mact']
     DilHeat=params['DilHeat']
@@ -64,7 +64,7 @@ def itc_titration_residual(params,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo
     predicted_heats=[]
 
     for injidx in range(len(ltotis)):
-        predicted_heat=itc_heats_prediction(Ka,DelH,ltoti_active[injidx],ltotf_active[injidx],\
+        predicted_heat=itc_heats_prediction(np.power(10,logKa),DelH,ltoti_active[injidx],ltotf_active[injidx],\
                         mtoti_active[injidx],mtotf_active[injidx],injvols[injidx],syrconc,vo)
         predicted_heats.append(predicted_heat+DilHeat)
 #    print(ys-predicted_heats)
@@ -245,11 +245,11 @@ class ITCDataset:
             prev_last5avg=last5avg
             injidx+=1
 
-    def superfit(self,Ka=1e5,DelH=-4000,Mact=1.0,DilHeat=1000,pts='all'):
+    def superfit(self,logKa=1e5,DelH=-4000,Mact=1.0,DilHeat=-500,pts='all'):
         params = Parameters()
-        params.add('Ka', value=Ka,min=1e3)
+        params.add('logKa', value=logKa,min=3,max=7)
         params.add('DelH', value=DelH)
-        params.add('Mact', value=Mact,min=0.5,max=2.6)
+        params.add('Mact', value=Mact,min=0.5,max=2.5)
         params.add('DilHeat', value=DilHeat,min=-2000,max=2000)
 #        params.add('DilHeat', value=0,vary=False)#,min=-1000,max=1000)
 #        if pts=='all':
@@ -261,29 +261,19 @@ class ITCDataset:
                args=(self.titrationdf.ltoti.values[1:],self.titrationdf.ltotf.values[1:],\
                 self.titrationdf.mtoti.values[1:],self.titrationdf.mtotf.values[1:],\
                 self.titrationdf.injvol.values[1:],self.syrconc*self.lact,self.vo,\
-                self.titrationdf.ndh.values[1:]) )
+                self.titrationdf.ndh.values[1:]))
         self.fit_params=fit_out.params
-        self.fit_Ka=fit_out.params['Ka'].value
+        self.fit_logKa=fit_out.params['logKa'].value
         self.fit_DelH=fit_out.params['DelH'].value
         self.fit_stoich=fit_out.params['Mact'].value
         self.fit_DilHeat=fit_out.params['DilHeat'].value
 #        print(params['Mact'])
         return fit_out
 
-#def itc_titration_residual(params,ltotis,ltotfs,mtotis,mtotfs,injvols,syrconc,vo,ys):
-
-    def convenience_fit(self,Ka=1e5,DelH=-4000,Mact=1.0):
-        fitvals=scipy.optimize.minimize(itc_l2lossfunc,(Ka,DelH,Mact),args=\
-                (self.ltotis[1:],self.ltotfs[1:],self.mtotis[1:],self.mtotfs[1:],self.injvols[1:],self.syrconc,self.vo,\
-                 self.ndh_heats[1:]))
-        print(fitvals)
-        self.fitKa,self.fitDelH,self.fitMact=fitvals.x
-
     def create_fit_plot(self,numpnts=1000):
         fit_ndhs=[]
-        fit_lmratios=[]
         for injidx in range(self.titrationdf.shape[0]):
-            fit_ndh=itc_heats_prediction(self.fit_Ka,self.fit_DelH,self.titrationdf.ltoti.values[injidx],\
+            fit_ndh=itc_heats_prediction(np.power(10,self.fit_logKa),self.fit_DelH,self.titrationdf.ltoti.values[injidx],\
                     self.titrationdf.ltotf.values[injidx],self.titrationdf.mtoti.values[injidx]*self.fit_stoich,\
                     self.titrationdf.mtotf.values[injidx]*self.fit_stoich,self.titrationdf.injvol.values[injidx],\
                     self.syrconc,self.vo)
@@ -300,9 +290,9 @@ class ITCDataset:
         store_dict['mtot0']=self.mtot0
         store_dict['mact']=self.mact
         store_dict['lact']=self.lact
-        store_dict['fit_Ka']=self.fit_Ka
-        store_dict['fit_DelH']=self.fit_DelH
-        store_dict['fit_stoich']=self.fit_stoich
+        #store_dict['fit_Ka']=self.fit_Ka
+        #store_dict['fit_DelH']=self.fit_DelH
+        #store_dict['fit_stoich']=self.fit_stoich
         store_dict['xs_power']=self.tracedf.xs_power.values.tolist()
         store_dict['smooth_powerbl']=self.tracedf.xs_power.values.tolist()
 
@@ -342,9 +332,9 @@ class ITCDataset:
         self.mtot0=store_dict['mtot0']
         self.mact=store_dict['mact']
         self.lact=store_dict['lact']
-        self.fit_Ka=store_dict['fit_Ka']
-        self.fit_DeH=store_dict['fit_DelH']
-        self.fit_stoich=store_dict['fit_stoich']
+        #self.fit_Ka=store_dict['fit_Ka']
+        #self.fit_DeH=store_dict['fit_DelH']
+        #self.fit_stoich=store_dict['fit_stoich']
         for injpeak in self.injection_peaks:
             stored_peak_dict=store_dict['injection_peaks'][str(injpeak.injnum)]
             injpeak.final_intstart=stored_peak_dict['final_intstart']

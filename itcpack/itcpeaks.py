@@ -20,7 +20,7 @@ def make_guided_figure(injpeak,injnum=1):
     fsy=LinearScale()
     xax=Axis(label='seconds',scale=fsx)
     yax=Axis(label='uWatt',scale=fsy,orientation='vertical')
-    flpr=bqplot.marks.FlexLine(x=injpeak.seconds,y=injpeak.xs_power,scales={'x':fsx,'y':fsy})
+    flpr=bqplot.marks.FlexLine(x=injpeak.seconds,y=injpeak.xs_power,scales={'x':fsx,'y':fsy},colors=['black'])
     blpts=bqplot.marks.Scatter(x=injpeak.guided_bp_seconds,y=injpeak.guided_bp_power,scales={'x':fsx,'y':fsy})
     rngpts=bqplot.marks.Scatter(x=[injpeak.guided_intstart,injpeak.guided_intstop],\
                                 y=[np.quantile(injpeak.final_xs_powerbl,0.25),np.quantile(injpeak.final_xs_powerbl,0.25)],\
