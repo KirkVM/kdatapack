@@ -62,6 +62,7 @@ class ActivityPanel:
                 ifields.append(r_stext)
             tabtups.append(( str(expnum),pn.Column(*ifields,width=200)  ))#r1_stext,r2_stext,width=300)   ))
         self.dtabs=pn.Tabs(*tabtups)
+        return self.dtabs
     def selector_windows(self):
         self.sels=[]
         info_fields={'expdate':'date','ename':'enzymes','sname':'substrates','experimenter':'person'}
@@ -96,7 +97,7 @@ class ActivityPanel:
                         self.df=self.df[self.df[ifkey]==selectorvalue]
         del self.dtabs
         self.date_tabs()
-        return self.panel_layout
+        #return self.panel_layout
 #            self.test=
 #        for event in events:
 #            self.test=event#[event.name,event.new,event.options,event.value]
@@ -119,3 +120,23 @@ class ActivityPanel:
 #        pass
 #        s
 #    tabs=pn.Tabs(*tabtups)#,sizing_mode='stretch_b
+
+import param
+class ActivityPanel2(param.Parameterized):
+    def __init__(self,initdf,**params):
+        #super(ActivityPanel2, self).__init__(**params)
+        self.df=initdf.copy()
+        expdate=param.Selector(objects=[str(x) for x in self.df['expdate'].unique()])
+    #expdate=param.Selector(objects=['things','stuff'])
+
+#    def selector_windows(self):
+#        self.sels=[]
+#        info_fields={'expdate':'date','ename':'enzymes','sname':'substrates','experimenter':'person'}
+#        for ifkey,ifname in info_fields.items():
+#            sel_options=['All']
+#            sel_options.extend([str(x) for x in self.df[ifkey].unique()])
+#            sel=pn.widgets.Select(name=ifname,options=sel_options)
+###            sel.param.watch(self.selector_callback,['value'],onlychanged=True)
+#            self.sels.append(sel)
+#        self.selcol=pn.Column(*self.sels,width=200)
+ 
