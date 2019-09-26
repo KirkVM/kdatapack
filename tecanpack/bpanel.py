@@ -8,35 +8,31 @@ from bokeh.models import ColumnDataSource,HoverTool
 from tecanpack import readers
 #plateset=readers.load_tecandata('allfiles.yml','kirk')#refresh_all=True)
 #alldf=plateset.get_df()
-
-
 alldf=pd.read_pickle('kirkdf.pkl')
+
+
+def cooly(ap,pname):
+    return [pn.panel(str(y),name=str(x)) for x,y in enumerate(ap.seldf[pname].unique())]
+
 class ActivityPanel(param.Parameterized):
+    initdf=param.DataFrame(alldf.copy())
+    seldf=param.DataFrame(alldf.copy())
+    viewdf=param.DataFrame()
     enames=param.Selector(objects=[str(x) for x in alldf['ename'].unique()])
     snames=param.Selector(objects=[str(x) for x in alldf['sname'].unique()])
     expdates=param.Selector(objects=[str(x) for x in alldf['expdate'].unique()])
     filter_enames=param.Boolean(False)
     filter_snames=param.Boolean(False)
     filter_expdates=param.Boolean(False)
-    expdf=None
-    plotdf=None
-    seldf=alldf.copy()
-    stupid=0
-#    enames.param.watch(self.selector_callback,['value'],onlychanged=True)
-#    pname_dict={'enzymes':'ename','exp_date':'expdate'}
-#    cool='funny'
-#    def selector_callback(self,*events):
-#        self.stupid=events[0]
-#        for event in events:
-#            self.stupid=event#[event.name,event.new,event.options,event.value]
-#            if event.obj.name=='enames':
-#                self.seldf=self.seldf[self.seldf['ename']==event.new]
-#        self.param.enames.objects=[str(x) for x in self.seldf['ename'].unique()]
-#        self.param.snames.objects=[str(x) for x in self.seldf['sname'].unique()]
-#        self.param.expdates.objects=[str(x) for x in self.seldf['expdate'].unique()]
-#            for ifkey,ifname in info_fields.items():
-#                if event.obj.name==ifname:
-#                    self.df=self.df[self.df[ifkey]==event.new]
+
+    expview_dates=param.List(['stuff'])
+    expview_enames=param.List(['dummy'])
+    expview_snames=param.List(['dummy'])
+#    tabtext=param.Dynamic(expview_enames)
+    tabtext=param.Callable(cooly)
+    tabbies=param.Dynamic()
+#    dtabs=pn.Tabs()
+
     @param.depends('enames',watch=True)
     def update_seldf(self):
         self.seldf=self.seldf[self.seldf['ename']==self.enames]
@@ -44,17 +40,33 @@ class ActivityPanel(param.Parameterized):
         self.param.snames.objects=[str(x) for x in self.seldf['sname'].unique()]
         self.param.expdates.objects=[str(x) for x in self.seldf['expdate'].unique()]
 
+#        self.expview_dates=param.List([])
+#        self.expview_enames=param.List([])
+#        self.expview_snames=param.List([])
+    
+    @param.depends('seldf',watch=True)
+    def update_viewer(self):
+        dategrps=self.seldf.groupby('expdate')
+        tabnum=1
+        for dt,dtdf in dategrps:
+            for pname in ['ename','sname','expdate']:
+                vals=[str(x) for x in dtdf[pname].unique()]
+                if pname=='expdate':
+                    self.expview_dates.append(vals)
+                if pname=='ename':
+                    self.expview_enames.append(vals)
+                if pname=='sname':
+                    self.expview_snames.append(vals)
 
-#    @param.depends('enames','snames','expdates',watch=True)
+
+    @param.depends('enames',watch=True)
+    def exp_updater(self):
+        self.tabbies=self.tabtext(self,'ename')
+        self.dtabs.active=0
+        self.dtabs.objects=self.tabbies
+
     def sel_viewer(self):
-#        self.seldf=self.seldf[self.seldf['ename']==self.enames]
-       #gspec = pn.GridSpec(sizing_mode='stretch_both', max_height=800,max_width=200,height_policy='max')
-        #gspec = pn.GridSpec(sizing_mode='scale_both')#max_width=50,max_height=20,width_policy='auto')#='stretch_width')#width=200)#,align='center')#sizing_mode='stretch_both', max_height=800,max_width=200,height_policy='max')
         gspec = pn.GridSpec(height=500,width=180,max_width=10,max_height=20,width_policy='max',height_policy='max')#max_width=50,max_height=20,width_policy='auto')#='stretch_width')#width=200)#,align='center')#sizing_mode='stretch_both', max_height=800,max_width=200,height_policy='max')
-#        gspec = pn.GridSpec(max_width=50,width_policy='max')#max_width=50,max_height=20,width_policy='auto')#='stretch_width')#width=200)#,align='center')#sizing_mode='stretch_both', max_height=800,max_width=200,height_policy='max')
-#        self.param.enames.objects=[str(x) for x in self.seldf['ename'].unique()]
-#        self.param.snames.objects=[str(x) for x in self.seldf['sname'].unique()]
-#        self.param.expdates.objects=[str(x) for x in self.seldf['expdate'].unique()]
         gspec[0:1,0:1] = pn.Column(pn.Param(self.param.filter_enames,
                         widgets={'filter_enames':{'type':pn.widgets.Checkbox,'name':'filter'}}),
                         sizing_mode='stretch_both',margin=(10,3,0,0))
@@ -82,37 +94,11 @@ class ActivityPanel(param.Parameterized):
                          sizing_mode='stretch_both')
         gspec[3:10,:5]=pn.Spacer(margin=0)
         return gspec
-
-#    @param.depends('enames','snames','expdates')#,watch=True)
+ 
     def exp_viewer(self):
-        tabtups=[]
-        expdf=self.seldf.copy()
-        if self.filter_enames:
-            expdf=expdf[expdf['ename']==self.enames] 
-            self.stupid='dumb'
-        if self.filter_snames:
-            expdf=expdf[expdf['sname']==self.snames] 
-            self.stupid='rad'
-        if self.filter_expdates:
-            dt_expdate=datetime.date(*[int(x) for x in self.expdates.split('-')])
-            expdf=expdf[expdf['expdate']==dt_expdate] 
-
-        expdates=[x for x in expdf.expdate.unique()]
-        for expnum,expdate in enumerate(expdates):
-            ifields=[]
-            for pname in ['ename','sname','expdate']:
-                vals=[str(x) for x in expdf[expdf.expdate==expdate][pname].unique()]
-                if len(vals)==0:
-                    rowvalstr='-'
-                else:
-                    rowvalstr=''.join(f'{x},' for x in vals[:-1])
-                    rowvalstr+=f'{vals[-1]}'
-                r_stext=pn.widgets.StaticText(value=f'{pname}: {rowvalstr}')
-                ifields.append(r_stext)
-            tabtups.append(( str(expnum),pn.Column(*ifields,width=200)  ))#r1_stext,r2_stext,width=300)   ))
-        dtabs=pn.Tabs(*tabtups)
-#        self.expdf=expdf
-        return dtabs
+        self.tabbies=self.tabtext(self,'ename')
+        self.dtabs=pn.Tabs(*self.tabbies)
+        return self.dtabs
 
     def theplot(self):
         self.p=figure()
