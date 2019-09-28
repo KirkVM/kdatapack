@@ -4,51 +4,18 @@ import panel as pn
 import pandas as pd
 from bokeh.plotting import show,output_notebook,figure
 from bokeh.models import ColumnDataSource,HoverTool
+from functools import partial
 
 from tecanpack import readers
 #plateset=readers.load_tecandata('allfiles.yml','kirk')#refresh_all=True)
 #alldf=plateset.get_df()
 alldf=pd.read_pickle('kirkdf.pkl')
 
-
-def cooly(ap,ptuples):
-    panels=[]
-    ap.viewdf=ap.initdf[ap.initdf.expdate.isin(ap.seldf.expdate.unique())]
-    ptexts=[]#[] for _ in range(len(ptuples))]
-    for dt,dtdf in ap.viewdf.groupby('expdate'):
-        ptext=f'Date: {str(dt)}\n\n\n'
-        for ptidx,ptuple in enumerate(ptuples):
-            pvals=list(dtdf[ptuple[0]].unique())
-            pstr_list=''.join(f'{x},' for x in pvals[:-1])
-            pstr_list+=f'{pvals[-1]}'
-            ptext+=f'{ptuple[1]}: {pstr_list}'
-            if ptidx+1<len(ptuples):
-                ptext+='\n\n\n'
-        ptexts.append(ptext)
-    return [pn.panel(ptexts[x],name=str(x)) for x in range(len(ptexts))]
-
-#def cooly(ap,ptuples):
-#    panels=[]
-#    ap.viewdf=ap.initdf[ap.initdf.expdate.isin(ap.seldf.expdate.unique())]
-#    ptexts=[]#[] for _ in range(len(ptuples))]
-#    for dt,dtdf in ap.viewdf.groupby('expdate'):
-#        pts=pn.widgets.StaticText(value=f'Date: {str(dt)}')
-#        for ptidx,ptuple in enumerate(ptuples):
-#            pvals=list(dtdf[ptuple[0]].unique())
-#            pstr_list=''.join(f'{x},' for x in pvals[:-1])
-#            pstr_list+=f'{pvals[-1]}'
-##            ptext+=f'{ptuple[1]}: {pstr_list}'
-#            pts.value+=f'{ptuple[1]}: {pstr_list}'
-##            pts.append(pn.widgets.StaticText(value=f'{ptuple[1]}: {pstr_list}'))
-#        ptexts.append(pts)
-#    return [pn.panel(ptexts[x],name=str(x)) for x in range(len(ptexts))]
-
-
-
 class ActivityPanel(param.Parameterized):
     initdf=param.DataFrame(alldf.copy())
     seldf=param.DataFrame(alldf.copy())
     viewdf=param.DataFrame()
+    exploredf=param.DataFrame()
     enames=param.Selector(objects=[str(x) for x in alldf['ename'].unique()])
     snames=param.Selector(objects=[str(x) for x in alldf['sname'].unique()])
     expdates=param.Selector(objects=[str(x) for x in alldf['expdate'].unique()])
@@ -59,10 +26,38 @@ class ActivityPanel(param.Parameterized):
     expview_dates=param.List(['stuff'])
     expview_enames=param.List(['dummy'])
     expview_snames=param.List(['dummy'])
-#    tabtext=param.Dynamic(expview_enames)
-    tabtext=param.Callable(cooly)
     tabbies=param.Dynamic()
 #    dtabs=pn.Tabs()
+    cool='dumb'
+
+    def get_plotdf(self,event,**kwargs):
+        filter_num=0
+        for k,v in kwargs.items():
+            if filter_num==0:
+                self.exploredf=self.initdf[self.initdf[k]==v]
+            else:
+                self.exploredf=self.exploredf[self.exploredf[k]==v]
+            filter_num+=1
+
+
+    def get_tabs(self,ptuples):
+        panels=[]
+        self.viewdf=self.initdf[self.initdf.expdate.isin(self.seldf.expdate.unique())]
+        tabwidgs=[]#[] for _ in range(len(ptuples))]
+        for dt,dtdf in self.viewdf.groupby('expdate'):
+            dscrptext=pn.widgets.StaticText(value=f'Date: {str(dt)}\n',width=200)
+            for ptidx,ptuple in enumerate(ptuples):
+                pvals=list(dtdf[ptuple[0]].unique())
+                pstr_list=''.join(f'{x},' for x in pvals[:-1])
+                pstr_list+=f'{pvals[-1]}'
+                dscrptext.value+=f'{ptuple[1]}: {pstr_list}'
+                if ptidx+1<len(ptuples): dscrptext.value+='\n'
+            explore_button=pn.widgets.Button(name=f'button{dt}',button_type='primary',width=100)
+            action_with_arg = partial(self.get_plotdf,expdate=dt)
+            explore_button.on_click(action_with_arg)
+            tabwidgs.append([dscrptext,explore_button])
+        return [pn.Column(*tabwidgs[x],name=str(x)) for x in range(len(tabwidgs))]
+
 
     @param.depends('enames',watch=True)
     def update_seldf(self):
@@ -93,7 +88,7 @@ class ActivityPanel(param.Parameterized):
     @param.depends('enames',watch=True)
     def exp_updater(self):
         #self.tabbies=self.tabtext(self,'ename')
-        self.tabbies=self.tabtext(self,[['ename','Enzymes'],['sname','Substrates'],['econc','EnzConc'],\
+        self.tabbies=self.get_tabs([['ename','Enzymes'],['sname','Substrates'],['econc','EnzConc'],\
                                   ['sconc','SConc'],['rxnph','pH'],['rxntemp','temp']])
         self.dtabs.active=0
         self.dtabs.objects=self.tabbies
@@ -133,7 +128,7 @@ class ActivityPanel(param.Parameterized):
 #        self.dtabs=pn.Tabs(*self.tabbies)
 #        return self.dtabs
     def exp_view(self):
-        self.tabbies=self.tabtext(self,[['ename','Enzymes'],['sname','Substrates'],['econc','EnzConc'],\
+        self.tabbies=self.get_tabs([['ename','Enzymes'],['sname','Substrates'],['econc','EnzConc'],\
                                   ['sconc','SConc'],['rxnph','pH'],['rxntemp','temp']])
         self.dtabs=pn.Tabs(*self.tabbies)
         return self.dtabs

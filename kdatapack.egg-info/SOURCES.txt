@@ -24,7 +24,6 @@ proteinseqpack/pseqgroup.py
 tecanpack/__init__.py
 tecanpack/activity_calcs.py
 tecanpack/apanel.py
-tecanpack/bpanel.py
 tecanpack/cleaners.py
 tecanpack/extracters.py
 tecanpack/readers.py
