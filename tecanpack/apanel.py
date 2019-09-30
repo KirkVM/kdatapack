@@ -1,4 +1,4 @@
-import datetime
+import datetime,collections
 import param
 import panel as pn
 import pandas as pd
@@ -16,19 +16,31 @@ class ActivityPanel(param.Parameterized):
     seldf=param.DataFrame(alldf.copy())
     viewdf=param.DataFrame()
     exploredf=param.DataFrame()
-    enames=param.Selector(objects=[str(x) for x in alldf['ename'].unique()])
-    snames=param.Selector(objects=[str(x) for x in alldf['sname'].unique()])
+#    enames=param.Selector(objects=[str(x) for x in alldf['ename'].unique()])
+    enames=param.Selector(objects= [x[0] for x in collections.Counter(
+                                    [str(x) for x in alldf['ename'].unique()]).most_common()])
+    snames=param.Selector(objects= [x[0] for x in collections.Counter(
+                                    [str(x) for x in alldf['sname'].unique()]).most_common()])
+    #snames=param.Selector(objects=[str(x) for x in alldf['sname'].unique()])
     expdates=param.Selector(objects=[str(x) for x in alldf['expdate'].unique()])
     filter_enames=param.Boolean(False)
     filter_snames=param.Boolean(False)
     filter_expdates=param.Boolean(False)
-
+    prev_filter_enames=False
+    prev_filter_snames=False
+    prev_filter_expdates=False
     expview_dates=param.List(['stuff'])
     expview_enames=param.List(['dummy'])
     expview_snames=param.List(['dummy'])
     tabbies=param.Dynamic()
+    invisits=0
+    midvisits1=0
+    midvisits2=0
+    midvisits3=0
+    midvisits4=0
+    visits=0
 #    dtabs=pn.Tabs()
-    cool='dumb'
+#    cool='dumb'
 
     def get_plotdf(self,event,**kwargs):
         filter_num=0
@@ -52,42 +64,77 @@ class ActivityPanel(param.Parameterized):
                 pstr_list+=f'{pvals[-1]}'
                 dscrptext.value+=f'{ptuple[1]}: {pstr_list}'
                 if ptidx+1<len(ptuples): dscrptext.value+='\n'
-            explore_button=pn.widgets.Button(name=f'button{dt}',button_type='primary',width=100)
+            explore_button=pn.widgets.Button(name='explore',button_type='primary',width=100)
             action_with_arg = partial(self.get_plotdf,expdate=dt)
             explore_button.on_click(action_with_arg)
             tabwidgs.append([dscrptext,explore_button])
         return [pn.Column(*tabwidgs[x],name=str(x)) for x in range(len(tabwidgs))]
 
 
-    @param.depends('enames',watch=True)
-    def update_seldf(self):
-        self.seldf=self.seldf[self.seldf['ename']==self.enames]
-        self.param.enames.objects=[str(x) for x in self.seldf['ename'].unique()]
-        self.param.snames.objects=[str(x) for x in self.seldf['sname'].unique()]
+    @param.depends('filter_enames','filter_snames','filter_expdates',watch=True)
+    def update_seldf_filters(self):
+        #did filter_enames change?
+        an_action=False
+        if self.filter_enames==False and self.prev_filter_enames:
+            an_action=True
+            add_df=self.initdf.copy()
+            if self.filter_snames:
+                add_df=add_df[add_df['sname']==self.snames]
+            if self.filter_expdates:
+                add_df=add_df[add_df['expdate']==datetime.date(*[int(x) for x in self.expdates.split('-')])]
+            #self.seldf=self.seldf.merge(add_df,how='left',left_index=True,right_index=True)
+            add_df=add_df[add_df.index.isin(self.seldf.index)==False]
+            self.seldf=pd.concat([self.seldf,add_df])#,verify_integrity=True)
+        if self.filter_snames==False and self.prev_filter_snames:
+            an_action=True
+            add_df=self.initdf.copy()
+            if self.filter_enames:
+                add_df=add_df[add_df['ename']==self.enames]
+            if self.filter_expdates:
+                add_df=add_df[add_df['expdate']==datetime.date(*[int(x) for x in self.expdates.split('-')])]
+            add_df=add_df[add_df.index.isin(self.seldf.index)==False]
+            self.seldf=pd.concat([self.seldf,add_df])#,verify_integrity=True)
+        #if self.filter_snames==False and self.prev_filter_snames:
+                #add_df=add_df[add_df['expdate']==self.expdates]
+        if self.filter_expdates==False and self.prev_filter_expdates:
+            add_df=self.initdf.copy()
+            if self.filter_enames:
+                add_df=add_df[add_df['ename']==self.enames]
+            if self.filter_snames:
+                add_df=add_df[add_df['sname']==self.snames]
+            add_df=add_df[add_df.index.isin(self.seldf.index)==False]
+            self.seldf=pd.concat([self.seldf,add_df])#,verify_integrity=True)
+
+#        an_action=True
+#        if an_action==True: 
+        self.param.enames.objects=[x[0] for x in collections.Counter(
+                                    [str(x) for x in self.seldf['ename'].unique()]).most_common()]
+        self.param.snames.objects=[x[0] for x in collections.Counter(
+                                    [str(x) for x in self.seldf['sname'].unique()]).most_common()]
         self.param.expdates.objects=[str(x) for x in self.seldf['expdate'].unique()]
 
-#        self.expview_dates=param.List([])
-#        self.expview_enames=param.List([])
-#        self.expview_snames=param.List([])
-    
-#    @param.depends('seldf',watch=True)
-#    def view_updater(self):
-#        dategrps=self.seldf.groupby('expdate')
-#        tabnum=1
-#        for dt,dtdf in dategrps:
-#            for pname in ['ename','sname','expdate']:
-#                vals=[str(x) for x in dtdf[pname].unique()]
-#                if pname=='expdate':
-#                    self.expview_dates.append(vals)
-#                if pname=='ename':
-#                    self.expview_enames.append(vals)
-#                if pname=='sname':
-#                    self.expview_snames.append(vals)
+        self.prev_filter_enames=self.filter_enames
+        self.prev_filter_snames=self.filter_snames
+        self.prev_filter_expdates=self.filter_expdates
+
+    @param.depends('enames','snames','expdates',watch=True)
+    def update_seldf(self):
+        if self.filter_enames:
+            self.seldf=self.seldf[self.seldf['ename']==self.enames]
+        if self.filter_snames:
+            self.seldf=self.seldf[self.seldf['sname']==self.snames]
+        if self.filter_expdates:
+            self.seldf=self.seldf[self.seldf['expdate']==datetime.date(*[int(x) for x in self.expdates.split('-')])]
+
+        self.param.enames.objects=[x[0] for x in collections.Counter(
+                                    [str(x) for x in self.seldf['ename'].unique()]).most_common()]
+        self.param.snames.objects=[x[0] for x in collections.Counter(
+                                    [str(x) for x in self.seldf['sname'].unique()]).most_common()]
+        self.param.expdates.objects=[str(x) for x in self.seldf['expdate'].unique()]
 
 
-    @param.depends('enames',watch=True)
+    @param.depends('seldf',watch=True)
     def exp_updater(self):
-        #self.tabbies=self.tabtext(self,'ename')
         self.tabbies=self.get_tabs([['ename','Enzymes'],['sname','Substrates'],['econc','EnzConc'],\
                                   ['sconc','SConc'],['rxnph','pH'],['rxntemp','temp']])
         self.dtabs.active=0
