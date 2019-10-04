@@ -27,5 +27,6 @@ tecanpack/apanel.py
 tecanpack/cleaners.py
 tecanpack/extracters.py
 tecanpack/readers.py
+tecanpack/tecandata.py
 tecanpack/tecanio.py
 tecanpack/visualizers.py
