@@ -322,6 +322,7 @@ class TecanPlate:
             self.welldatadf['measurement'].at[dfidx]=xlval#self.welldatadf.append(newdf,ignore_index=True,sort=False)
     def assess_cleanup_disambiguate(self,enamedf=None,snamedf=None):
         '''this runs after welldatadf to add molecular weight info etc'''
+        #PART 1: CHECKS
         #start by ensuring that all necessary fields are present & logic is correct
         possible_epreptype_values=['cellfree','ecoli_purified','cellfree_purified']
         possible_enametype_values=['gbacc','jgi_shorthand','kirk_shorthand','evan_shorthand','nate_shorthand']
@@ -347,15 +348,10 @@ class TecanPlate:
             assert(self.welldatadf[self.welldatadf[rtype[0]].notna()][rtype[1]].notna().all()),\
                 f"{rtype[1]} is required for all wells with a {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
 
-#        #need enametype for all enames
-#        assert(self.welldatadf[self.welldatadf.ename.notna()].enametype.notna().all()),\
-#                f"enametype required for all ename. Plate {self.ifpath.name}-{self.expsheet}"
-
-        #some fixed logic to add purified status to enzymes...currently only purified if epreptype=="ecoli_purified"
+        #PART 2: FIXED LOGIC - add purified status to enzymes...currently only purified if epreptype=="ecoli_purified"
         self.welldatadf=self.welldatadf.assign(epurified_status=lambda x:x.epreptype=='ecoli_purified')
-        #DO SOMETHING HERE WITH SNAMES based on sdb if present
-        ####****
-        ###***
+        self.welldatadf.sname=self.welldatadf.sname.apply(str.lower)
+        #PART 3: ENAMEDF
         if enamedf is not None:
             egbacc=[]
             emw=[]
@@ -390,6 +386,27 @@ class TecanPlate:
                     else:
                         econc_molar.append(None)
             self.welldatadf=self.welldatadf.assign(egbacc=egbacc,emw=emw,econc_mgmL=econc_mgmL,econc_molar=econc_molar)
+        #PART 4: SNAMEDF
+        if snamedf is not None:
+            all_possible_snames=[x for x in list(snamedf.allnames) for x in x]
+            assert set(list(self.welldatadf.sname.dropna().unique())).issubset(all_possible_snames),\
+                   "one more more sname values doesn't exist in current sname file"
+            sname=[]
+            for dfidx in self.welldatadf.index:
+                cur_sname=self.welldatadf.loc[dfidx,'sname']
+                if cur_sname is None: 
+                    sname.append(None)
+                else:
+                    for snidx in snamedf.index:
+                        cur_allnames=snamedf.loc[snidx,'allnames']
+                        if cur_sname in cur_allnames:
+                            sname.append(snamedf.loc[snidx,'sname'])
+
+            self.welldatadf['full_sname']=self.welldatadf.sname
+            self.welldatadf=self.welldatadf.assign(sname=sname)
+#        assert set(list(self.welldatadf.sname.dropna().unique())).issubset(list(snamedf.sname)),\
+#                "one more more sname values doesn't exist in current sname file"
+        
 #
 #                egbacc.append(enamerow['gbacc'])
 #                
