@@ -81,15 +81,22 @@ class WellReading:
     ename: str = None
     econc: float = None
     econc_units: str = None
+    econc_molar: float = None
+    econc_mgmL: float = None
+    emw: float = None #molecular weight in Da
     ebarcode: str = None
     eprepdate: datetime.date = None
-    epreptype: str = None #'cellfree","purified"
-    enametype: str = "acc" #default is that the name=accession code
+    epreptype: str = None #"cellfree","ecoli_purified","cellfree_purified"
+    enametype: str = None #("acc","jgi_shorthand","kirk_shorthand","evan_shorthand","nate_shorthand")#default is that the name=accession code
     evariant: str = None #ko, ea, +cbmx2,etc
     ethawdate: datetime.date = None
     estock_conc: float = None
     estock_conc_units: str = None
     e_description_string: str = None
+    egbacc: str = None
+    ename_shorthand : str = None
+    epurified_status : bool = None
+
     #standard settings
     standardname: str = None
     standardconc: float = None
@@ -308,15 +315,115 @@ class TecanPlate:
         newdf=pd.DataFrame(dfrows_)
         rowcolRE=re.compile('([A-H])(\d{1,2})')
         self.welldatadf=self.welldatadf.append(newdf,ignore_index=True,sort=False)
-        #for rcidx in self.welldict.keys():
-        #for rcidx in self.welldict.keys():
         for dfidx in self.welldatadf.index:
-            #rowstr,colstr=rowcolRE.match(rcidx).groups()
             rowstr,colstr=rowcolRE.match(self.welldatadf.wellid.at[dfidx]).groups()
-#            self.welldict[rcidx]['measurement'].at[rcidx]=self.exceldf[int(colstr)].at[rowstr]
             xlval=self.exceldf[int(colstr)].at[rowstr]
             self.welldict[rowstr+colstr].measurement=xlval
             self.welldatadf['measurement'].at[dfidx]=xlval#self.welldatadf.append(newdf,ignore_index=True,sort=False)
+    def assess_cleanup_disambiguate(self,enamedf=None,snamedf=None):
+        '''this runs after welldatadf to add molecular weight info etc'''
+        #start by ensuring that all necessary fields are present & logic is correct
+        possible_epreptype_values=['cellfree','ecoli_purified','cellfree_purified']
+        possible_enametype_values=['gbacc','jgi_shorthand','kirk_shorthand','evan_shorthand','nate_shorthand']
+        possible_evariant_values=['KO','EA','CBMX2']
+        possible_econc_units_values=['uM','mM','mgmL']
+        assert(self.welldatadf.epreptype.dropna().isin(possible_epreptype_values).all()),\
+                f"epreptype value must be one of {possible_epreptype_values}. Plate {self.ifpath.name}-{self.expsheet}"
+        assert(self.welldatadf.enametype.dropna().isin(possible_enametype_values).all()),\
+                f"enametype value must be one of {possible_enametype_values}. Plate {self.ifpath.name}-{self.expsheet}"
+        assert(self.welldatadf.evariant.dropna().isin(possible_evariant_values).all()),\
+                f"evariant value must be one of {possible_evariant_values}. Plate {self.ifpath.name}-{self.expsheet}"
+        assert(self.welldatadf.econc_units.dropna().isin(possible_econc_units_values).all()),\
+                f"econc_units value must be one of {possible_econc_units_values}. Plate {self.ifpath.name}-{self.expsheet}"
+        #make sure proper fields present in all cases
+        #two-way requirements---
+        for rtype in [['sconc','sname'],['econc','ename'],['econc','econc_units'],['standardname','standardconc']]:
+            assert(self.welldatadf[self.welldatadf[rtype[0]].isnull()][rtype[1]].dropna().shape[0]==0),\
+                    f"{rtype[1]} value is set for a well with no {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
+            assert(self.welldatadf[self.welldatadf[rtype[1]].isnull()][rtype[0]].dropna().shape[0]==0),\
+                    f"{rtype[0]} value is set for a well with no {rtype[1]}. Plate {self.ifpath.name}-{self.expsheet}"
+        #one-way requirements---
+        for rtype in [['ename','epreptype'],['ename','enametype']]:
+            assert(self.welldatadf[self.welldatadf[rtype[0]].notna()][rtype[1]].notna().all()),\
+                f"{rtype[1]} is required for all wells with a {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
+
+#        #need enametype for all enames
+#        assert(self.welldatadf[self.welldatadf.ename.notna()].enametype.notna().all()),\
+#                f"enametype required for all ename. Plate {self.ifpath.name}-{self.expsheet}"
+
+        #some fixed logic to add purified status to enzymes...currently only purified if epreptype=="ecoli_purified"
+        self.welldatadf=self.welldatadf.assign(epurified_status=lambda x:x.epreptype=='ecoli_purified')
+        #DO SOMETHING HERE WITH SNAMES based on sdb if present
+        ####****
+        ###***
+        if enamedf is not None:
+            egbacc=[]
+            emw=[]
+            econc_molar=[]
+            econc_mgmL=[]
+            for dfidx in self.welldatadf.index:
+                cur_ename=self.welldatadf.loc[dfidx,'ename']
+                if cur_ename is None: 
+                    egbacc.append(None)
+                    emw.append(None)
+                    econc_molar.append(None)
+                    econc_mgmL.append(None)
+                    continue
+                cur_enametype=self.welldatadf.loc[dfidx,'enametype']
+                enamerow=enamedf[enamedf[cur_enametype]==cur_ename]
+                assert(enamerow.shape[0]==1),'should only be 1 ename match'
+                egbacc.append(enamerow['gbacc'].values[0])
+                emw.append(enamerow['mw'].values[0])
+                #now update conc's using that molecular weight and econc + econc_units
+                cur_econc=self.welldatadf.loc[dfidx,'econc']
+                cur_econc_units=self.welldatadf.loc[dfidx,'econc_units']
+                if cur_econc_units=='uM':
+                    econc_molar.append(cur_econc*1e-6)
+                    econc_mgmL.append(cur_econc*1e-6*enamerow['mw'].values[0])
+                if cur_econc_units=='mM':
+                    econc_molar.append(cur_econc*1e-3)
+                    econc_mgmL.append(cur_econc*1e-3*enamerow['mw'].values[0])
+                if cur_econc_units=='mgmL':
+                    econc_mgmL.append(cur_econc)
+                    if enamerow['mw'].notna():
+                        econc_molar.append(cur_econc/enamerow['mw'].values[0])
+                    else:
+                        econc_molar.append(None)
+            self.welldatadf=self.welldatadf.assign(egbacc=egbacc,emw=emw,econc_mgmL=econc_mgmL,econc_molar=econc_molar)
+#
+#                egbacc.append(enamerow['gbacc'])
+#                
+#                [enamedf.enametype==cur_enametype]) 
+#                enamedf.loc['e',cur_enametype]
+#                if self.welldatadf.loc[dfidx,'enametype']==''
+                
+#    econc_units: str = None
+#    econc_molar: float = None
+#    econc_mgmL: float = None
+#    emw: float = None #molecular weight in Da
+#    ebarcode: str = None
+#
+#    egbacc: str = None
+#    ename_shorthand : str = None
+#    epurified_status : bool = None
+
+
+#    
+#        assert()
+#                f". Plate {self.ifpath.name}-{self.expsheet}"
+#        assert()
+#                f". Plate {self.ifpath.name}-{self.expsheet}"
+#        assert()
+#                f". Plate {self.ifpath.name}-{self.expsheet}"
+#        assert()
+#                f". Plate {self.ifpath.name}-{self.expsheet}"
+        
+
+
+#        if edb is not None:
+#            conn=sqlite3.connect(edb)
+#            self.e_accession=....
+
     def view_plate(self,inline_jupyter=True):
         reset_output()
         hover_tool=HoverTool(names=['stuff'],tooltips=[('Well','@wellid'),('Enzyme','@enzyme'),('Substrate','@substrate'),('Standard','@standard')]

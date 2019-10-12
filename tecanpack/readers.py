@@ -38,6 +38,24 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
     pkl_dict=configgy['pklplates']
     pkl_fldrpath=determinepath(cfdir,pkl_dict)
 
+    enamedf=None
+    if 'edb' in configgy.keys():
+        enamedf_dict=configgy['edb']
+        enamedf_fpathstr=determinepath(cfdir,enamedf_dict)
+        try:
+            enamedf=pd.read_json(path_or_buf=enamedf_fpathstr,orient='records',lines=True)
+        except:
+            print(f'failed to open {enamedf_fpathstr}. Is it saved as json, orient="records",lines=True?')
+
+    snamedf=None
+    if 'sdb' in configgy.keys():
+        snamedf_dict=configgy['sdb']
+        snamedf_fpathstr=determinepath(cfdir,snamedf_dict)
+        try:
+            snamedf=pd.read_json(path_or_buf=snamedf_fpathstr,orient='records',lines=True)
+        except:
+            print(f'failed to open {snamedf_fpathstr}. Is it saved as json, orient="records",lines=True?')
+     
     #now get user/device settings from settingsfpath
     sfp=Path(settingsfpathstr)
     sfdir=sfp.parent
@@ -98,6 +116,7 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
             load_required=True
 #            conn.close()
         if load_required:
+            #GET LOAD SCRIPT LOCATION, IMPORT,RUN
             modulepath=Path(ls[0])
             spec=importlib.util.spec_from_file_location(modulepath.name,modulepath)#'kdfs/dload_dir/load_scripts/testscript.py','kdfs/dload_dir/load_scripts/testscript.py')#
             themodule=importlib.util.module_from_spec(spec)
@@ -108,6 +127,16 @@ def loadplates_from_confiles(cfpathstr,settingsfpathstr,username,refresh_all):
             except:
                 conn.close()
                 sys.exit(f'Error occurred in load script {lsentry}. Quitting.')
+            #DO THE FIXER-UPPER STEP TO ORGANIZE ENAMES AND TYPES
+            try:
+                for plate in plates:
+                   #pass
+                    #make sure I'm reading in correct db etc here...
+                    plate.assess_cleanup_disambiguate(enamedf=enamedf,snamedf=snamedf)
+            except:
+                conn.close()
+                sys.exit(f'Error occurred in load script {lsentry} [[during cleanup/disambig]]. Quitting.')
+
             for plate in plates:
                 newpltuple=(plate.plateid,plate.ifpath.name,plate.expsheet,lsentry,pickle.dumps(plate))
                 c.execute('''INSERT INTO PLATES VALUES (?,?,?,?,?)''',newpltuple)

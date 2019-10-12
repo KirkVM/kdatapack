@@ -10,13 +10,22 @@ def build_simple_yldconverter(calint,calslope):#make_cylinder_volume_func(r):
         return (measurement-calint)/calslope 
     return yield_converter
 
+#def build_simple_ebgsubtracter()
+
 def assign_rxn_types(df):
     df=df.assign(ectrl_status=lambda x: (x.ename.isnull()==False) & (x.sname.isnull()) & (x.standardname.isnull()),
                  sctrl_status=lambda x: (x.sname.isnull()==False) & (x.ename.isnull()) & (x.standardname.isnull()),
                  calstd_status=lambda x: (x.standardname.isnull()==False) & (x.sname.isnull()) & (x.ename.isnull()),
                  bgctrl_status=lambda x: (x.sname.isnull()) & (x.standardname.isnull()) & (x.standardname.isnull()),
                  rxn_status=lambda x: (x.sname.isnull()==False) & (x.sconc>0) & (x.ename.isnull()==False) & (x.econc>0))
+#below is to-be implemented...requires eg an etype field in load_script so that can identify e's with background matl
+#    df=df.assign(e_bgctrl_status=lambda x: (x.ename.isnull()==False) & (x.sname.isnull()) & (x.standardname.isnull())\
+#                   & (x.etype.isin(['wgextract'])) )
+#    df=df.assign(s_bgctrl_status=lambda x: (x.ename.isnull()==False) & (x.sname.isnull()) & (x.standardname.isnull()\
+#                   & (x.stype.isin(['crude_lysate'])  )),
     return df
+
+#def 
 
 class CAZyExperiment:
     def __init__(self,selected_df,alldf=None,expname=None):
@@ -48,6 +57,7 @@ class CAZyExperiment:
                             apply(DNS_YldConverter)
         self.expdf.re_yield=self.expdf.measurement.where((self.expdf.detection=='BCA') & (self.expdf.calstd_status==False)).\
                             apply(BCA_YldConverter)
+        
 #WHAT IS re_yield after correction only for e-only control (0 if DNS)
 #        self.expdf=re_yield_ectrlsub
 #WHAT IS re_yield after correction only for s-only control
