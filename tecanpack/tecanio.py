@@ -338,19 +338,27 @@ class TecanPlate:
                 f"econc_units value must be one of {possible_econc_units_values}. Plate {self.ifpath.name}-{self.expsheet}"
         #make sure proper fields present in all cases
         #two-way requirements---
-        for rtype in [['sconc','sname'],['econc','ename'],['econc','econc_units'],['standardname','standardconc']]:
+        for rtype in [['sconc','sname'],['econc','ename'],['standardname','standardconc']]:
             assert(self.welldatadf[self.welldatadf[rtype[0]].isnull()][rtype[1]].dropna().shape[0]==0),\
                     f"{rtype[1]} value is set for a well with no {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
             assert(self.welldatadf[self.welldatadf[rtype[1]].isnull()][rtype[0]].dropna().shape[0]==0),\
                     f"{rtype[0]} value is set for a well with no {rtype[1]}. Plate {self.ifpath.name}-{self.expsheet}"
         #one-way requirements---
-        for rtype in [['ename','epreptype'],['ename','enametype']]:
+        for rtype in [['ename','epreptype'],['ename','enametype'],['econc','econc_units']]:
             assert(self.welldatadf[self.welldatadf[rtype[0]].notna()][rtype[1]].notna().all()),\
                 f"{rtype[1]} is required for all wells with a {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
 
         #PART 2: FIXED LOGIC - add purified status to enzymes...currently only purified if epreptype=="ecoli_purified"
         self.welldatadf=self.welldatadf.assign(epurified_status=lambda x:x.epreptype=='ecoli_purified')
-        self.welldatadf.sname=self.welldatadf.sname.apply(str.lower)
+        sname=[]
+        for snidx in self.welldatadf.index:
+            cur_sname=self.welldatadf.loc[snidx,'sname']
+            if cur_sname is None:
+                sname.append(None)
+            else:
+                sname.append(cur_sname.lower())
+        self.welldatadf=self.welldatadf.assign(sname=sname)
+#        self.welldatadf.sname=self.welldatadf.sname.apply(str.lower)
         #PART 3: ENAMEDF
         if enamedf is not None:
             egbacc=[]
@@ -366,8 +374,9 @@ class TecanPlate:
                     econc_mgmL.append(None)
                     continue
                 cur_enametype=self.welldatadf.loc[dfidx,'enametype']
-                enamerow=enamedf[enamedf[cur_enametype]==cur_ename]
-                assert(enamerow.shape[0]==1),'should only be 1 ename match'
+                #enamerow=enamedf[enamedf[cur_enametype].str.match(cur_ename,case=False)]
+                enamerow=enamedf[enamedf[cur_enametype].str.lower()==cur_ename.lower()]
+                assert(enamerow.shape[0]==1),'should be 1ao1 ename match'
                 egbacc.append(enamerow['gbacc'].values[0])
                 emw.append(enamerow['mw'].values[0])
                 #now update conc's using that molecular weight and econc + econc_units
@@ -380,16 +389,17 @@ class TecanPlate:
                     econc_molar.append(cur_econc*1e-3)
                     econc_mgmL.append(cur_econc*1e-3*enamerow['mw'].values[0])
                 if cur_econc_units=='mgmL':
-                    econc_mgmL.append(cur_econc)
-                    if enamerow['mw'].notna():
+                    if enamerow['mw'].notna().all():
                         econc_molar.append(cur_econc/enamerow['mw'].values[0])
+                        econc_mgmL.append(cur_econc)#*1e-3*enamerow['mw'].values[0])
                     else:
                         econc_molar.append(None)
+                        econc_mgmL.append(None)#*1e-3*enamerow['mw'].values[0])
             self.welldatadf=self.welldatadf.assign(egbacc=egbacc,emw=emw,econc_mgmL=econc_mgmL,econc_molar=econc_molar)
         #PART 4: SNAMEDF
         if snamedf is not None:
-            all_possible_snames=[x for x in list(snamedf.allnames) for x in x]
-            assert set(list(self.welldatadf.sname.dropna().unique())).issubset(all_possible_snames),\
+            all_possible_snames=[x.lower() for x in list(snamedf.allnames) for x in x]
+            assert set(list(self.welldatadf.sname.dropna().str.lower().unique())).issubset(all_possible_snames),\
                    "one more more sname values doesn't exist in current sname file"
             sname=[]
             for dfidx in self.welldatadf.index:
@@ -399,31 +409,11 @@ class TecanPlate:
                 else:
                     for snidx in snamedf.index:
                         cur_allnames=snamedf.loc[snidx,'allnames']
-                        if cur_sname in cur_allnames:
+                        if cur_sname in [x.lower() for x in cur_allnames]:
                             sname.append(snamedf.loc[snidx,'sname'])
 
             self.welldatadf['full_sname']=self.welldatadf.sname
             self.welldatadf=self.welldatadf.assign(sname=sname)
-#        assert set(list(self.welldatadf.sname.dropna().unique())).issubset(list(snamedf.sname)),\
-#                "one more more sname values doesn't exist in current sname file"
-        
-#
-#                egbacc.append(enamerow['gbacc'])
-#                
-#                [enamedf.enametype==cur_enametype]) 
-#                enamedf.loc['e',cur_enametype]
-#                if self.welldatadf.loc[dfidx,'enametype']==''
-                
-#    econc_units: str = None
-#    econc_molar: float = None
-#    econc_mgmL: float = None
-#    emw: float = None #molecular weight in Da
-#    ebarcode: str = None
-#
-#    egbacc: str = None
-#    ename_shorthand : str = None
-#    epurified_status : bool = None
-
 
 #    
 #        assert()
