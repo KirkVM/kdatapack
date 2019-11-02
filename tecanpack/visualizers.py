@@ -28,3 +28,21 @@ def panel_plot(df):
     p=figure()
     output_notebook()
     show(p)
+
+def plot_eblanks(df):
+    df['strdate']=df.expdate.apply(str)
+#    sdf_dict={}
+    cds_dict={}
+    for egroup in df.groupby(by=['ename','expdate']):
+        grpname=''.join([str(x)+' ' for x in egroup[0]])[:-1]
+        cds_dict[grpname]=ColumnDataSource.from_df(egroup[1])#df[df.expdate==expdate])#sdf_dict[expdate])
+
+    p=figure()
+    ht=HoverTool(tooltips=[('enzyme','@ename'),('M','@econc_molar'),('date','@strdate'),('plateid','@plateid')])
+    for dnum,grpname in enumerate(cds_dict):
+        didx=dnum%10
+        p.circle('econc_mgmL','measurement',legend=grpname,size=10,color=palettes.Category20[20][didx],source=cds_dict[grpname])
+    p.tools=[ht]
+    output_notebook()
+    show(p)
+#

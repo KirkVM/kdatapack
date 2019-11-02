@@ -212,11 +212,11 @@ class ActivityPanel(param.Parameterized):
 #                        sizing_mode='stretch_both',margin=(10,3,0,0))
 #
     def visualize(self):
-        gspec = pn.GridSpec(height=750,width=1100,max_width=10,max_height=20,width_policy='max',height_policy='max')#max_width=50,max_height=20,width_policy='auto')#='stretch_width')#width=200)#,align='center')#sizing_mode='stretch_both', max_height=800,max_width=200,height_policy='max')
-        gspec[0:20,0:25]=self.theplot()
-        gspec[0:20,25:30]=self.sel_view()
-        gspec[0:20,30:35]=self.exp_view()
-        gspec[20:30,0:35]=self.plot_view()#pltpanel.PlotViewPanel()
+        gspec = pn.GridSpec(height=500,width=800,max_width=10,max_height=20,width_policy='max',height_policy='max')#max_width=50,max_height=20,width_policy='auto')#='stretch_width')#width=200)#,align='center')#sizing_mode='stretch_both', max_height=800,max_width=200,height_policy='max')
+        gspec[0:22,0:25]=self.theplot()
+        gspec[0:22,25:30]=self.sel_view()
+        gspec[0:22,30:35]=self.exp_view()
+        gspec[22:30,0:35]=self.plot_view()#pltpanel.PlotViewPanel()
         return gspec
 #        self.panel_layout=pn.Row(self.sel_view(),self.exp_view())
 #        return self.panel_layout

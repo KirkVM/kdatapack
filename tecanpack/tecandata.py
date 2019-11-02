@@ -13,11 +13,12 @@ def build_simple_yldconverter(calint,calslope):#make_cylinder_volume_func(r):
 #def build_simple_ebgsubtracter()
 
 def assign_rxn_types(df):
-    df=df.assign(ectrl_status=lambda x: (x.ename.isnull()==False) & (x.sname.isnull()) & (x.standardname.isnull()),
-                 sctrl_status=lambda x: (x.sname.isnull()==False) & (x.ename.isnull()) & (x.standardname.isnull()),
+    df=df.assign(eblank_status=lambda x: (x.ename.isnull()==False) & (x.sname.isnull()) & (x.standardname.isnull()),
+                 sblank_status=lambda x: (x.sname.isnull()==False) & (x.ename.isnull()) & (x.standardname.isnull()),
                  calstd_status=lambda x: (x.standardname.isnull()==False) & (x.sname.isnull()) & (x.ename.isnull()),
-                 bgctrl_status=lambda x: (x.sname.isnull()) & (x.standardname.isnull()) & (x.standardname.isnull()),
+                 ebg_status=lambda x: (x.sname.isnull()) & (x.standardname.isnull()) & (x.ename=='wge'),
                  rxn_status=lambda x: (x.sname.isnull()==False) & (x.sconc>0) & (x.ename.isnull()==False) & (x.econc>0))
+                 #sbg_status=lambda x: (x.sname.isnull()) & (x.standardname.isnull()) & (x.sname=='?'))
 #below is to-be implemented...requires eg an etype field in load_script so that can identify e's with background matl
 #    df=df.assign(e_bgctrl_status=lambda x: (x.ename.isnull()==False) & (x.sname.isnull()) & (x.standardname.isnull())\
 #                   & (x.etype.isin(['wgextract'])) )
@@ -48,16 +49,19 @@ class CAZyExperiment:
                                                         self.default_calibration_standard['DNS']['slope'])
             BCA_YldConverter=build_simple_yldconverter(self.default_calibration_standard['BCA']['int'],\
                                                         self.default_calibration_standard['BCA']['slope'])
-#        self.expdf=expdf.measurement.apply(DNS_YldConverter) for x in expdf.where(expdf.detection=='DNS')
         self.expdf=cleandf(self.expdf)
-        #self.expdf['re_yield']=self.expdf.apply(lambda x:DNS_YldConverter(x.measurement) if x.detection=='DNS' else
-        #                                        BCA_YldConverter(x.measurement),axis='columns')
         self.expdf=self.expdf.assign(re_yield=np.nan)
+        #create re_yield column for every entry that isn't a calibration standard
         self.expdf.re_yield=self.expdf.measurement.where((self.expdf.detection=='DNS') & (self.expdf.calstd_status==False)).\
                             apply(DNS_YldConverter)
         self.expdf.re_yield=self.expdf.measurement.where((self.expdf.detection=='BCA') & (self.expdf.calstd_status==False)).\
                             apply(BCA_YldConverter)
-        
+        #now do some background correction
+        #every rxn requires subtraction of eblank,sblank (and potentially ebg and sbg)
+#        self.expdf.re_yield_eblank=
+#        self.expdf.re_yield_eblank_type=
+
+        # 
 #WHAT IS re_yield after correction only for e-only control (0 if DNS)
 #        self.expdf=re_yield_ectrlsub
 #WHAT IS re_yield after correction only for s-only control
