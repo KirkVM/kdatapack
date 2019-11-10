@@ -1,5 +1,5 @@
 from bokeh.plotting import show,output_notebook,figure
-from bokeh.models import ColumnDataSource,HoverTool
+from bokeh.models import ColumnDataSource,HoverTool,Range1d
 from bokeh import palettes
 def plot_controls(df,detection):
     df=df.dropna(subset=['standardname'])
@@ -29,7 +29,8 @@ def panel_plot(df):
     output_notebook()
     show(p)
 
-def plot_eblanks(df):
+from bokeh.models import BoxZoomTool,ResetTool
+def plot_eblanks(df,xcolname='econc_mgmL',ycolname='measurement'):
     df['strdate']=df.expdate.apply(str)
 #    sdf_dict={}
     cds_dict={}
@@ -37,12 +38,15 @@ def plot_eblanks(df):
         grpname=''.join([str(x)+' ' for x in egroup[0]])[:-1]
         cds_dict[grpname]=ColumnDataSource.from_df(egroup[1])#df[df.expdate==expdate])#sdf_dict[expdate])
 
-    p=figure()
-    ht=HoverTool(tooltips=[('enzyme','@ename'),('M','@econc_molar'),('date','@strdate'),('plateid','@plateid')])
+    p=figure(plot_width=800)
+    ht=HoverTool(tooltips=[('enzyme','@ename'),('M','@econc_molar'),('date','@strdate'),('plateid','@plateid'),\
+                            ('thing','@predvlp_dlnfactor')])
     for dnum,grpname in enumerate(cds_dict):
         didx=dnum%10
-        p.circle('econc_mgmL','measurement',legend=grpname,size=10,color=palettes.Category20[20][didx],source=cds_dict[grpname])
-    p.tools=[ht]
+        p.circle(xcolname,ycolname,legend=grpname,size=10,color=palettes.Category20[20][didx],source=cds_dict[grpname])
+    p.tools=[ht,BoxZoomTool(),ResetTool()]
+#    p.tools=[ht,"box_zoom"]
+    p.x_range=Range1d(-0.1,4.5)
     output_notebook()
     show(p)
 #

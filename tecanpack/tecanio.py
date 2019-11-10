@@ -118,7 +118,7 @@ def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
             "excel df read-in indexing incorrect. Is row/col set correctly?"
     return platedf
 
-def make_plates_rxn_duplicates(plate1,plate2,allow_subplate=False):
+def make_plates_rxn_duplicates(plate1,plate2,plate1_wellids=[],plate2_wellids=[],allow_subplate=False):
     '''Set a plate's rxnvesselid values to those of previous plate
     Iterates over new plate (plate2) and copies from previous based on wellid
     
@@ -127,16 +127,28 @@ def make_plates_rxn_duplicates(plate1,plate2,allow_subplate=False):
     plate2: plate that has been added
     '''
     if allow_subplate==False:
+        assert (len(plate1_wellids)==0 and len(plate2_wellids)==0),\
+            "if you are trying to make subplate a rxnvesselid copy, must specify allow_subplate=True"
         assert (len(set(plate1.welldict.keys()).difference(plate2.welldict.keys()))==0),\
              "cannot make entire plate rxn duplicates. don't have same wells"
+#    else:
+#        assert (len(set(plate2.welldict.keys()).difference(plate1.welldict.keys()))==0),\
+#             "cannot make entire plate rxn duplicates. don't have same wells"
+        for dfidx in plate2.welldatadf.index:
+            wid=plate2.welldatadf.loc[dfidx].wellid
+            rxnvesselid2keep=plate1.welldict[wid].wellreading.rxnvesselid
+            plate2.welldict[wid].wellreading.rxnvesselid=rxnvesselid2keep #set TecanWell
+            plate2.welldatadf.loc[dfidx,'rxnvesselid']=rxnvesselid2keep #set df also
     else:
-        assert (len(set(plate2.welldict.keys()).difference(plate1.welldict.keys()))==0),\
-             "cannot make entire plate rxn duplicates. don't have same wells"
-    for dfidx in plate2.welldatadf.index:
-        wid=plate2.welldatadf.loc[dfidx].wellid
-        rxnvesselid2keep=plate1.welldict[wid].wellreading.rxnvesselid
-        plate2.welldict[wid].wellreading.rxnvesselid=rxnvesselid2keep #set TecanWell
-        plate2.welldatadf.loc[dfidx,'rxnvesselid']=rxnvesselid2keep #set df also
+        print('making a subplate rxn duplicate for a couple plates')
+        assert len(plate1_wellids)==len(plate2_wellids),"sub-plate wellids are not equal in length"
+        for wid1,wid2 in zip(plate1_wellids,plate2_wellids):
+            rxnvesselid2keep=plate1.welldict[wid1].wellreading.rxnvesselid
+            plate2.welldict[wid2].wellreading.rxnvesselid=rxnvesselid2keep #set TecanWell
+            #now set df. first get plate2's index value
+            p2idx=plate2.welldatadf[plate2.welldatadf.wellid==wid2].index.values[0]
+            plate2.welldatadf.loc[p2idx,'rxnvesselid']=rxnvesselid2keep
+ 
 
 class TecanWell:
     def __init__(self,well_settings_dict,use_experimenter_defaults=False):
@@ -347,6 +359,13 @@ class TecanPlate:
         for rtype in [['ename','epreptype'],['ename','enametype'],['econc','econc_units']]:
             assert(self.welldatadf[self.welldatadf[rtype[0]].notna()][rtype[1]].notna().all()),\
                 f"{rtype[1]} is required for all wells with a {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
+#            ['DNS','predvlp_dlnfactor'],['DNS','postdvlp_dlnfactor'],\
+#            ['BCA','predvlp_dlnfactor'],['BCA','postdvlp_dlnfactor']]:
+        #conditional one-way requirements--
+        for rtype in [['detection','DNS','predvlp_dlnfactor'],['detection','DNS','postdvlp_dlnfactor'],\
+                      ['detection','BCA','predvlp_dlnfactor'],['detection','BCA','postdvlp_dlnfactor']]:
+            assert(self.welldatadf[self.welldatadf[rtype[0]]==rtype[1]][rtype[2]].notna().all()),\
+                f"{rtype[2]} is required for all wells with {rtype[0]}={rtype[1]}. Plate {self.ifpath.name}-{self.expsheet}"
 
         #PART 2: FIXED LOGIC - add purified status to enzymes...currently only purified if epreptype=="ecoli_purified"
         self.welldatadf=self.welldatadf.assign(epurified_status=lambda x:x.epreptype=='ecoli_purified')
