@@ -1,8 +1,13 @@
 import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression,RANSACRegressor
+
 def cleandf(df,overs='nan'):
     cleandf=df.copy()
-    if overs=='nan':
-        cleandf=cleandf.replace(to_replace={'measurement':{'OVER':np.nan}})
+    #if df has 'OVER' in measurements, it will not be type float
+    if df.measurement.dtype != float:
+        if overs=='nan':
+            cleandf=cleandf.replace(to_replace={'measurement':{'OVER':np.nan}})
     return cleandf
 
 def build_simple_yldconverter(calint,calslope):#make_cylinder_volume_func(r):
@@ -10,6 +15,10 @@ def build_simple_yldconverter(calint,calslope):#make_cylinder_volume_func(r):
         return (measurement-calint)/calslope 
     return yield_converter
 
+def build_linear_converter(int,slope):
+    def linear_converter(value):
+        return (value-int)/slope
+    return linear_converter
 #def build_simple_ebgsubtracter()
 
 def set_relative_dlnfactor(dfrow):
@@ -35,7 +44,11 @@ def assign_rxn_types(df):
     return df
 
 def assign_dlnadjusted_values(df):
-    df=df.assign(econc_mgmL_adjusted=lambda x:x.econc_mgmL*x.relative_dlnfactor)
+    df=df.assign(econc_mgmL_reldvlpadj=lambda x:x.econc_mgmL*x.relative_dlnfactor)
+    df=df.assign(econc_molar_reldvlpadj=lambda x:x.econc_molar*x.relative_dlnfactor)
+    df=df.assign(econc_reldvlpadj=lambda x:x.econc*x.relative_dlnfactor)
+    df=df.assign(sconc_reldvlpadj=lambda x:x.sconc*x.relative_dlnfactor)
+    df=df.assign(standardconc_reldvlpadj=lambda x:x.standardconc*x.relative_dlnfactor)
     return df
 
 def add_interpreted_columns(df):
@@ -54,6 +67,40 @@ def calc_rxn_yields(df):
     return df
 #def get_eblankdf_bca(df):
 
+def calc_bca_ebgconverter(df):
+    ebdf_bca=df[(df['eblank_status']) & (df['detection']=='BCA')]
+    poly=PolynomialFeatures(1)
+    xtarr=poly.fit_transform(np.expand_dims(ebdf_bca.econc_mgmL_reldvlpadj,1))
+    rlf=LinearRegression(fit_intercept=False)
+    ransac=RANSACRegressor(base_estimator=rlf,min_samples=0.9,residual_threshold=0.5)
+    ransac.fit(xtarr,ebdf_bca.measurement)
+    #these lines determine ids of outliers
+    maskdf=ebdf_bca.assign(inliers=ransac.inlier_mask_)
+    maskdf[['ename','econc','expdate']][maskdf.inliers==False]
+    #now return a conversion function built with this model
+    print(f'using default ebg conversion of int={ransac.estimator_.coef_[0]} and slope={ransac.estimator_.coef_[1]}')
+    return build_linear_converter(*ransac.estimator_.coef_)
+        #calculate bca_eblank_default by
+        #   (1) grouping into dilution schemes
+        #   (2) get correct to get into one curve with 5/105 and 1
+        #   (3) fit line to get avg re_yield vs mgmL_conc equation
+
+#def get_sblavg_ydict(df):
+#    sbldf=df[df['sblank_status']]
+#    sbldict={}
+#    sblgrps=sbldf.groupby('sname')
+#    for
+def calc_re_yield(dfrow,bca_converter=None,dns_converter=None):
+    if dfrow.calstd_status==True:
+        return np.nan
+#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='DNS') & (self.alldf.calstd_status==False)).\
+    assert(dfrow.detection in ['DNS','BCA'])
+    if dfrow.detection=='DNS':
+        return(dns_converter(dfrow.measurement))
+    elif dfrow.detection=='BCA':
+        return(bca_converter(dfrow.measurement))
+#        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter)
+
 class CAZyExperiment:
     def __init__(self,selected_df,alldf=None,expname=None):
         self.expdf=selected_df.copy()
@@ -67,8 +114,8 @@ class CAZyExperiment:
             self.expname=expname
         else:
             self.expname=str(self.expdf.expdate.unique()[0])
-        self.default_calibration_standard={'DNS':{'slope':1.0,'int':0.05}}
-        self.default_calibration_standard.update({'BCA':{'slope':1.99,'int':0.15}})
+        self.default_calibration_standard={'DNS':{'slope':0.45,'int':0.04}}
+        self.default_calibration_standard.update({'BCA':{'slope':2.8,'int':0.17}})
         self.base_bca_predvlp_dlnfactor=5/105
 
     def calc_yields(self,colname='re_yield',subset_selections={},calibration_standard='default',\
@@ -80,6 +127,13 @@ class CAZyExperiment:
                                                         self.default_calibration_standard['DNS']['slope'])
             BCA_YldConverter=build_simple_yldconverter(self.default_calibration_standard['BCA']['int'],\
                                                         self.default_calibration_standard['BCA']['slope'])
+        #get the econc - yield default converter       
+        self.alldf=cleandf(self.alldf)
+        self.ebg_converter=calc_bca_ebgconverter(self.alldf)
+        #now get a dictionary of default substrate baselines
+#        self.sbldict=get_sblavg_dict(self.alldf)
+
+        #now get yields and stuff 
         self.expdf=cleandf(self.expdf)
         self.expdf=self.expdf.assign(re_yield=np.nan)
         #create re_yield column for every entry that isn't a calibration standard
@@ -87,71 +141,13 @@ class CAZyExperiment:
                             apply(DNS_YldConverter)
         self.expdf.re_yield=self.expdf.measurement.where((self.expdf.detection=='BCA') & (self.expdf.calstd_status==False)).\
                             apply(BCA_YldConverter)
-        #get default bca e_blank:
-#        get_dilution_adjusted_values(self.expdf,self.base_bca_predvlp_dlnfactor)
-#        get_dilution_adjusted_values(self.alldf,self.base_bca_predvlp_dlnfactor)
 
+        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
+        
+#        self.alldf=self.alldf.assign(re_yield=np.nan)
+#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='DNS') & (self.alldf.calstd_status==False)).\
+#                            apply(DNS_YldConverter)
+#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='BCA') & (self.alldf.calstd_status==False)).\
+#                            apply(BCA_YldConverter)
 
-#        from sklearn.linear_model import LinearRegression,Lasso,RANSACRegressor
-
-#lf=LinearRegression(fit_intercept=False)
-#lasso_f=Lasso()
-#lf.fit(xtarr,ebdf.measurement)
-#lasso_f.fit(xtarr,ebdf.measurement)
-#rlf=LinearRegression(fit_intercept=False)
-#ransac=RANSACRegressor(base_estimator=rlf,min_samples=0.9,residual_threshold=0.5)
-#ransac.fit(xtarr,ebdf.measurement)
-        #calculate bca_eblank_default by
-        #   (1) grouping into dilution schemes
-        #   (2) get correct to get into one curve with 5/105 and 1
-        #   (3) fit line to get avg re_yield vs mgmL_conc equation
-
-        #self.all_eblank_df=get_eblankdf_bca(alldf,converter=BCA_YldConverter)
-        self.expdf=calc_rxn_yields(self.expdf)
-
-        #now do some background correction
-        #every rxn requires subtraction of eblank,sblank (and potentially ebg and sbg)
-#        self.expdf.re_yield_eblank=
-#        self.expdf.re_yield_eblank_type=
-
-        # 
-#WHAT IS re_yield after correction only for e-only control (0 if DNS)
-#        self.expdf=re_yield_ectrlsub
-#WHAT IS re_yield after correction only for s-only control
-#        self.expdf=re_yield_sctrlsub
-#WHAT IS re_yield after correction only for enzyme-solution background (ie wge).  (0 if purified enzyme)
-#        self.expdf=re_yield_bgctrlsub
-
-
-
-#    """returns a df with average value for each unique sname,sconc,ename,econc"""
-#    if controldf is not None:
-#        calint,calslope=get_calibration_standard(controldf,'BCA')
-#        calibration_standard['BCA']['int']=calint
-#        calibration_standard['BCA']['slope']=calslope
-#    if bl_subtract=='eavg':
-#        dfpctrl=df.dropna(subset=['econc'])
-#        dfpctrl=dfpctrl[dfpctrl.sconc.isnull()]
-#        pctrl_avg=dfpctrl.measurement.mean()
-#        pbl_subtract=pctrl_avg-calibration_standard['BCA']['int']
-#        print(f'subtracting {pbl_subtract} from e wells')
-#        df=df.assign(measurement_bg=df.measurement)
-#        for idx in df[df.econc.notnull()].index:
-#            df.loc[idx,'measurement_bg']=df.measurement.loc[idx]-pbl_subtract
-##        df.loc[:,'measurement_bg']=[df.measurement.loc[x]-pbl_subtract if x in df.econc.notnull().index]# for x in df.index else df.measurement.loc[x]]
-#        df.loc[:,'wyield']=df.measurement_bg.apply(calc_well_yield,\
-#                       args=((calibration_standard['BCA']['int'],calibration_standard['BCA']['slope'])) )
-#    elif type(bl_subtract)==float:
-#        df=df.assign(measurement_bg=df.measurement)
-#        for idx in df[df.econc.notnull()].index:
-#            df.loc[idx,'measurement_bg']=df.measurement.loc[idx]-bl_subtract
-#        #df.loc[:,'measurement_bg']=df.measurement-bl_subtract#(pctrl_avg-calibration_standard['BCA']['int'])
-#        df.loc[:,'wyield']=df.measurement_bg.apply(calc_well_yield,\
-#                       args=((calibration_standard['BCA']['int'],calibration_standard['BCA']['slope'])) )
-#
-#    else:
-#        df.loc[:,'wyield']=df.measurement.apply(calc_well_yield,\
-#                       args=((calibration_standard['BCA']['int'],calibration_standard['BCA']['slope'])) )
-#    return df
-##
-#
+#        self.expdf=calc_rxn_yields(self.expdf)
