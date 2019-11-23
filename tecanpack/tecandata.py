@@ -118,10 +118,6 @@ def calc_ebg_yield(dfrow,eslope):#,sname,sctrl_status):
     else:
         return np.nan
 
-#def rxn_yield_calculator(df):
-#    df
-#    dfrow
-#        self.expdf['rxn_yield']=self.expdf.apply(rxn_yield_calculator)
 class CAZyExperiment:
     def __init__(self,selected_df,alldf=None,expname=None):
         self.expdf=selected_df.copy()
@@ -188,27 +184,4 @@ class CAZyExperiment:
         self.expdf.sbg_yield= self.expdf.apply(calc_sbg_yield,args=(self.sbldict,),axis=1)
         self.expdf.ebg_yield= self.expdf.apply(calc_ebg_yield,args=(self.ebl_slope,),axis=1)
         self.expdf.rxn_yield=self.expdf.where(self.expdf.rxn_status).apply(lambda x:x.re_yield_1X-x.sbg_yield-x.ebg_yield,axis=1)
-#        self.expdf.sbg_yield= self.expdf.apply(calc_sbg_yield,args=(self.sbldict,),axis=1)
 
-#        self.expdf.sbg_yield=self.expdf.where(self.expdf.sconc.notnull()).apply(lambda x:self.sbldict[x.sname]*x.sconc,axis=1)
-#        self.expdf.ebg_yield=self.expdf.where((self.expdf.econc.notna()) & (self.expdf.detection=='BCA')).\
-#                                apply(lambda x:self.ebl_slope*x.econc_mgmL,axis=1)
-
-
-
-
-#        self.expdf.rxn_yield=self.expdf.where(self.expdf.rxn_status).apply()
-#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='DNS') & (self.alldf.calstd_status==False)).\
-#                            apply(DNS_YldConverter)
-#        self.expdf=rxn_yield_calculator(self.expdf)
-#        self.expdf['rxn_yield']=self.expdf.apply(rxn_yield_calculator)
-        #now let's calculate actual yield and rxn yield!
-
-
-#        self.alldf=self.alldf.assign(re_yield=np.nan)
-#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='DNS') & (self.alldf.calstd_status==False)).\
-#                            apply(DNS_YldConverter)
-#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='BCA') & (self.alldf.calstd_status==False)).\
-#                            apply(BCA_YldConverter)
-
-#        self.expdf=calc_rxn_yields(self.expdf)

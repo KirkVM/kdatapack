@@ -6,6 +6,7 @@ dfitlib/fitstats.py
 dfitlib/freq_fitting.py
 dfitlib/loss_funcs.py
 dfitlib/mlsampling.py
+dfitlib/paramy.py
 kdatapack.egg-info/PKG-INFO
 kdatapack.egg-info/SOURCES.txt
 kdatapack.egg-info/dependency_links.txt
