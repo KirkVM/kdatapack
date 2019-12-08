@@ -1,44 +1,7 @@
 import numpy as np
 from typing import Callable,Sequence
 
-#def linear_model(xs,intercept,*lin_coefficients):
-#    '''returns linear function of x values
-#    
-#    Arguments:
-#    xs: values of independent variable (shape=(x,ndimensions))
-#    intercept: value of offset term
-#    lin_coefficients: variable number of coefficients (num must match ndimensions)
-#    '''
-#    print(xs.shape)
-#    print(len(xs.shape))
-#    print(len(lin_coefficients))
-#    if len(xs.shape)==1:
-#        assert (len(lin_coefficients)==1)
-#    else:
-#        assert (xs.shape[0]==len(lin_coefficients))
-#        if xs.shape[1]==len(lin_coefficients):
-#            print('xs are expected to be in [X0s,X1s,X2s,...]. Bc dims are same length, please confirm this')
-#    #return intercept+np.dot(lin_coefficients,xs)
-#    #estimates=xs.copy()
-#    estimates=np.array([xidx*xcoef for xidx,xcoef in zip(xs,lin_coefficients)]) 
-#    return intercept
-#    return np.dot(lin_coefficients,xs)
-
-
-#def linear_model(xvals,intercept,*slopes):
-#    '''returns linear function of x values
-#    '''
-#    rval=np.zeros(len(xvals))
-#    rval+=intercept
-#    if len(slopes)==1:
-#        slopes=slopes[0]
-#    else:
-#        slopes=np.array(slopes)
-#    newsum=np.dot(xvals,slopes)
-#    
-#    return rval+newsum
-#    return slope*xs+intercept
-
+###############MODELS################################
 def linear_model(xvals:np.ndarray,*coefs:float):
     '''returns linear function of x values. 
     
@@ -76,6 +39,18 @@ def logistic_simple(xvals:np.ndarray,amp:float,offset:float,gamma:float,theta:fl
     logistic_core=1/(1+np.exp(-gamma*(xvals-theta)))
     return offset+amp*logistic_core
 
+
+#####lmfit wrappers###############
+def lmlogistic_simple(pars,modelfunc,xvals,yvals):
+    amp=pars['amp']
+    offset=pars['offset']
+    gamma=pars['gamma']
+    theta=pars['theta']
+    
+    predicted=logistic_simple(xvals,amp,offset,gamma,theta)
+    return yvals-predicted
+
+###########scipy.optimize.minimize wrappers###########
 def l2_minimizer(modelargs:Sequence,modelfunc:Callable,indep_vals:np.ndarray,dep_vals:np.ndarray):
     '''abstracted minimizer to be called from scipy.optimize.minimize (or from others?) arguments: modelargs: tuple/list of parameters that will be passed to the model modelfunc: the function to be called that model the data
                     -modelfunc requires signature (indepvals,arg1,arg2,arg3,etc)
@@ -94,14 +69,3 @@ def l1_minimizer(modelargs:Sequence,modelfunc:Callable,indep_vals:np.ndarray,dep
 #    return abs(np.sum(model_estimates-dep_vals))#delta,delta)
     normsum=np.sum([abs(x-y) for x,y in zip(model_estimates,dep_vals)])
     return normsum
-#    normsum=0
-#    for me,dv in zip(model_estimates,dep_vals):
-#        normsum+=abs(me-dv)
-#    return normsum
-#    return abs(np.sum(model_estimates-dep_vals))#delta,delta)
-#def l1_minimizer
-#def l1_minimizer(modelfunc:Callable,modelargs:Sequence,indep_vals:np.ndarray,dep_vals:np.ndarray):
-#    model_estimates=modelfunc(indep_vals,*modelargs)
-#    delta=model_estimates-dep_vals
-#    return abs(np.sum(model_estimates-dep_vals))#delta,delta)
-#    assert callable(modelfunc),"modelfunc must be a callable"
