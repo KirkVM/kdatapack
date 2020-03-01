@@ -110,6 +110,7 @@ class ITCDataset:
 
     def adjust_peaks(self,start_injnum=1):
         self.peak_figs=[itcpeaks.make_guided_figure(self.injection_peaks[x],injnum=x+1) for x in range(len(self.injection_peaks))]
+        #self.peak_figs=[itcpeaks.make_guided_figure_fixed(None,injnum=x+1) for x in range(len(self.injection_peaks))]
         self.gs = GridspecLayout(16, 20)
         self.rbutton=Button(description='<')
         self.rbutton.on_click(self.on_rbutton_clicked)
@@ -118,7 +119,8 @@ class ITCDataset:
         self.fbutton=Button(description='>')
         self.fbutton.on_click(self.on_fbutton_clicked)
         self.gs[0,1]=self.fbutton
-        
+
+        #1/24/20-- now calling 
         self.svbutton=Button(description='save changes')
         self.svbutton.on_click(self.on_svbutton_clicked)
         self.gs[0,8]=self.svbutton
@@ -126,6 +128,7 @@ class ITCDataset:
         self.gs[1:,:]=self.peak_figs[start_injnum-1]
         self.peak_figs_idx=start_injnum-1
         return self.gs
+        #return self.peak_figs[0]
     
     def on_rbutton_clicked(self,b):
         if self.peak_figs_idx>0:
@@ -249,7 +252,8 @@ class ITCDataset:
         params = Parameters()
         params.add('logKa', value=logKa,min=3,max=7)
         params.add('DelH', value=DelH)
-        params.add('Mact', value=Mact,min=0.5,max=2.5)
+        params.add('Mact', value=Mact,min=0.9,max=2.5)
+        #params.add('Mact', value=Mact,min=0.5,max=5.5)
         params.add('DilHeat', value=DilHeat,min=-2000,max=2000)
 #        params.add('DilHeat', value=0,vary=False)#,min=-1000,max=1000)
 #        if pts=='all':

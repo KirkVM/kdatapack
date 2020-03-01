@@ -87,7 +87,7 @@ class WellReading:
     ebarcode: str = None
     eprepdate: datetime.date = None
     epreptype: str = None #"cellfree","ecoli_purified","cellfree_purified"
-    enametype: str = None #("acc","jgi_shorthand","kirk_shorthand","evan_shorthand","nate_shorthand")#default is that the name=accession code
+    enametype: str = None #("acc","jgi_shorthand","kirk_shorthand","evan_shorthand","nk_shorthand")#default is that the name=accession code
     evariant: str = None #ko, ea, +cbmx2,etc
     ethawdate: datetime.date = None
     estock_conc: float = None
@@ -337,7 +337,7 @@ class TecanPlate:
         #PART 1: CHECKS
         #start by ensuring that all necessary fields are present & logic is correct
         possible_epreptype_values=['cellfree','ecoli_purified','cellfree_purified']
-        possible_enametype_values=['gbacc','jgi_shorthand','kirk_shorthand','evan_shorthand','nate_shorthand']
+        possible_enametype_values=['gbacc','jgi_shorthand','kirk_shorthand','evan_shorthand','nk_shorthand']
         possible_evariant_values=['KO','EA','CBMX2']
         possible_econc_units_values=['uM','mM','mgmL']
         assert(self.welldatadf.epreptype.dropna().isin(possible_epreptype_values).all()),\
@@ -348,12 +348,18 @@ class TecanPlate:
                 f"evariant value must be one of {possible_evariant_values}. Plate {self.ifpath.name}-{self.expsheet}"
         assert(self.welldatadf.econc_units.dropna().isin(possible_econc_units_values).all()),\
                 f"econc_units value must be one of {possible_econc_units_values}. Plate {self.ifpath.name}-{self.expsheet}"
+        
+        #### (ename=='wge' is a special case)
+        ebgdf=self.welldatadf[self.welldatadf.ename=='wge']
+        assert(ebgdf.econc.dropna().shape[0]==0),"wge wells should have no econc" 
+        #for next set of assays, use a version with ename=='wge' dropped
         #make sure proper fields present in all cases
         #two-way requirements---
+        noebgdf=self.welldatadf[self.welldatadf.ename!='wge']
         for rtype in [['sconc','sname'],['econc','ename'],['standardname','standardconc']]:
-            assert(self.welldatadf[self.welldatadf[rtype[0]].isnull()][rtype[1]].dropna().shape[0]==0),\
+            assert(noebgdf[noebgdf[rtype[0]].isnull()][rtype[1]].dropna().shape[0]==0),\
                     f"{rtype[1]} value is set for a well with no {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
-            assert(self.welldatadf[self.welldatadf[rtype[1]].isnull()][rtype[0]].dropna().shape[0]==0),\
+            assert(noebgdf[noebgdf[rtype[1]].isnull()][rtype[0]].dropna().shape[0]==0),\
                     f"{rtype[0]} value is set for a well with no {rtype[1]}. Plate {self.ifpath.name}-{self.expsheet}"
         #one-way requirements---
         for rtype in [['ename','epreptype'],['ename','enametype'],['econc','econc_units']]:
@@ -386,7 +392,7 @@ class TecanPlate:
             econc_mgmL=[]
             for dfidx in self.welldatadf.index:
                 cur_ename=self.welldatadf.loc[dfidx,'ename']
-                if cur_ename is None: 
+                if cur_ename is None or cur_ename=='wge':
                     egbacc.append(None)
                     emw.append(None)
                     econc_molar.append(None)

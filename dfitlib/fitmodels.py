@@ -39,6 +39,9 @@ def logistic_simple(xvals:np.ndarray,amp:float,offset:float,gamma:float,theta:fl
     logistic_core=1/(1+np.exp(-gamma*(xvals-theta)))
     return offset+amp*logistic_core
 
+def michaelismenten(xvals=np.ndarray,km=float,vmax=float):
+    return vmax*xvals/(km+xvals)
+
 
 #####lmfit wrappers###############
 def lmlogistic_simple(pars,modelfunc,xvals,yvals):

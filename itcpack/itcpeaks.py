@@ -20,7 +20,7 @@ def make_guided_figure(injpeak,injnum=1):
     fsy=LinearScale()
     xax=Axis(label='seconds',scale=fsx)
     yax=Axis(label='uWatt',scale=fsy,orientation='vertical')
-    flpr=bqplot.marks.FlexLine(x=injpeak.seconds,y=injpeak.xs_power,scales={'x':fsx,'y':fsy},colors=['black'])
+    flpr=bqplot.marks.Lines(x=injpeak.seconds,y=injpeak.xs_power,scales={'x':fsx,'y':fsy},colors=['black'])
     blpts=bqplot.marks.Scatter(x=injpeak.guided_bp_seconds,y=injpeak.guided_bp_power,scales={'x':fsx,'y':fsy})
     rngpts=bqplot.marks.Scatter(x=[injpeak.guided_intstart,injpeak.guided_intstop],\
                                 y=[np.quantile(injpeak.final_xs_powerbl,0.25),np.quantile(injpeak.final_xs_powerbl,0.25)],\
@@ -28,7 +28,7 @@ def make_guided_figure(injpeak,injnum=1):
                                 colors=['gold'],marker='rectangle',default_skew=0.99,default_size=400)
     bls=[]
     for blseg in injpeak.blsegs:
-        newbl=bqplot.marks.FlexLine(x=blseg.seconds,y=blseg.blvals,scales={'x':fsx,'y':fsy})
+        newbl=bqplot.marks.Lines(x=blseg.seconds,y=blseg.blvals,scales={'x':fsx,'y':fsy})
         bls.append(newbl)
     injpeak.plot_bls=bls
     fig=Figure(marks=[flpr,blpts,rngpts,*bls],axes=[xax,yax],min_aspect_ratio=1.2,\
@@ -41,6 +41,18 @@ def make_guided_figure(injpeak,injnum=1):
     rngpts.restrict_x=True
     rngpts.on_drag_end(injpeak.rng_guided_callback)
     return fig
+
+def make_guided_figure_fixed(injpeak,injnum=1):
+    fsx=LinearScale()
+    fsy=LinearScale()
+    xax=Axis(label='seconds',scale=fsx)
+    yax=Axis(label='uWatt',scale=fsy,orientation='vertical')
+    fig=Figure(axes=[xax,yax],min_aspect_ratio=1.2,\
+                fig_margin={'top':60, 'bottom':60, 'left':60, 'right':0})
+#
+#    fig=Figure()#axes=[xax,yax],min_aspect_ratio=1.2,\
+    return fig
+
 
 def create_interp_line(x0,x1,y0,y1,seconds):
     poly=PolynomialFeatures(1)
@@ -97,7 +109,7 @@ class ITCInjectionPeak:
         self.calc_xs_heat()
 
     def create_guided_bl(self):
-        steps50sec_idx=[int(x) for x in np.linspace(0,len(self.seconds)-1,self.seconds[-1]/50)]#guide pts ~every 50seconds
+        steps50sec_idx=[int(x) for x in np.linspace(0,len(self.seconds)-1,int(self.seconds[-1]/50))]#guide pts ~every 50seconds
         steps8_idx=[int(x) for x in np.linspace(0,len(self.seconds)-1,8)] #8 evenly-spaced guide points
         self.guided_bp_indices=[max(x,y) for x,y in zip(steps50sec_idx[:10],steps8_idx)]#choose option with bigger step size
         self.guided_bp_seconds=[self.seconds[x] for x in self.guided_bp_indices]
@@ -140,6 +152,7 @@ class ITCInjectionPeak:
             else:
                 newbp_pwr.append(self.guided_bp_power[bpidx])
         self.guided_bp_power=newbp_pwr
+        #self.save_guided_bl()
 
     def rng_guided_callback(self,name,value):
 #        xval=value['point']['x']
@@ -152,6 +165,7 @@ class ITCInjectionPeak:
         stop_diffs=[abs(x-int_stop_time) for x in self.seconds]
         stop_idx=stop_diffs.index(min(stop_diffs))
         self.final_intstop=self.seconds[stop_idx]
+        #self.save_guided_bl()
 #        ,self.final_intstop=name.x
 #        self.cool=name
 #        self.dumb=value
