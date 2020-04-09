@@ -31,28 +31,30 @@ class JrnlReference:
         self.doi=None
 
 class KineticParam:
-    def __init__(self,infodict):
-        self.text=infodict['text']
-        self.evidence_index=int(infodict['evidence'])
-        self.ktype_label=infodict['ktype_lbl']
-        self.km_mined=infodict['km_mined']
-        self.kcat_mined=infodict['kcat_mined']
+    def __init__(self,text,evidxs,ktype_label,km_mined,kcat_mined,vmax_mined):#infodict):
+        self.text=text
+        self.evidence_index=evidxs #list of integers
+        self.ktype_label=ktype_label
+        self.km_mined=km_mined
+        self.vmax_mined=vmax_mined
+        self.kcat_mined=kcat_mined
         self.journal_reference=None #add this later if possible
-        self.doi=None
+        self.doi=[]
     def __str__(self):
         retstr=f'ktype_field: {self.ktype_label}\n'
         retstr+=f'km= {self.km_mined or self.ktype_label.lower()=="km"},'
-        retstr+=f'kcat= {self.kcat_mined or self.ktype_label.lower()=="kcat"}\n'
+        retstr+=f'kcat= {self.kcat_mined or self.ktype_label.lower()=="kcat"},'
+        retstr+=f'vmax= {self.vmax_mined or self.ktype_label.lower()=="vmax"}\n'
         retstr+=f'description: {self.text}\n'
         if self.doi is not None:
-            retstr+=f'article DOI: {self.doi}\n'
+            retstr+=f'article DOIs: {self.doi}\n'
         return retstr
 #        return str(self.evidence_number)
 #        print(self.evidence_number)
 
 class EvidenceSource:
-    def __init__(self,evkey,pmid=None,doi=None):
-        self.evidence_index=evkey
+    def __init__(self,evidx,pmid=None,doi=None):
+        self.evidence_index=evidx
         self.pmid=pmid
         self.doi=doi
 
@@ -103,7 +105,7 @@ def parse_protein_xml(accession):
     annotations=soup.find_all('comment')
     functions=[]
     activities=[]
-    kinetics=[]
+    kps=[]
     for annotation in annotations:
         if annotation['type']=='function':
             for t in annotation.find_all('text'):
@@ -124,20 +126,19 @@ def parse_protein_xml(accession):
             assert(len(kins)==1),'more than 1 kinetics field?'
             kinkids=[x for x in kins[0].children if x.name!=None]
             for kinkid in kinkids:
-                kin={'evidence':kinkid['evidence']}
+                kinevidxs=[int(x) for x in kinkid['evidence'].split()] #can be more than one!
                 if kinkid.name!='text':
-                    kin['ktype_lbl']=kinkid.name
+                    ktype_lbl=kinkid.name
                 else:
-                    kin['ktype_lbl']='unknown'
-                kin['text']=kinkid.text
+                    ktype_lbl='unknown'
+                kintext=kinkid.text
                 #now let's mine the text
-                kin['kcat_mined']='kcat' in kinkid.text.lower().split()
-                kin['km_mined']='km' in kinkid.text.lower().split() 
-                kinetics.append(kin)
-    kps=[]
-    for k in kinetics:
-        kp=KineticParam(k)
-        kps.append(kp)
+                kcat_mined='kcat' in kinkid.text.lower().split()
+                km_mined='km' in kinkid.text.lower().split()
+                vmax_mined='vmax' in kinkid.text.lower().split()
+                kp=KineticParam(kintext,kinevidxs,ktype_lbl,km_mined,kcat_mined,vmax_mined)#infodict):P10477
+                kps.append(kp)
+    
     evidences=soup.find_all('evidence')
     exp_evidences=[]
     for evidence in evidences:
@@ -176,8 +177,8 @@ def parse_protein_xml(accession):
                     exp_ev.doi=jref.doi
     for kp in upe.kinetic_params:
         for exp_ev in upe.exp_evidences:
-            if kp.evidence_index==exp_ev.evidence_index:
-                kp.doi=exp_ev.doi
+            if exp_ev.evidence_index in kp.evidence_index:
+                kp.doi.append(exp_ev.doi)
 #                    print('match')
 #            print(exp_ev.evidence_index)
     return upe

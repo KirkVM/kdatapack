@@ -17,6 +17,7 @@ phylotreepack/bokehapp.py
 phylotreepack/phylotree.py
 phylotreepack/phylotree_helpers.py
 phylotreepack/tree_modify.py
+phylotreepack/tree_utilities.py
 phylotreepack/treestats.py
 phylotreepack/treeviz.py
 proteinseqpack/__init__.py
