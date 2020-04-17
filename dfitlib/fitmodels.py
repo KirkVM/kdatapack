@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from typing import Callable,Sequence
 
@@ -41,6 +42,9 @@ def logistic_simple(xvals:np.ndarray,amp:float,offset:float,gamma:float,theta:fl
 
 def michaelismenten(xvals=np.ndarray,km=float,vmax=float):
     return vmax*xvals/(km+xvals)
+
+def poisson_distribution(xvals=np.ndarray,lam=float):
+    return np.power(lam,xvals)*np.exp(-1*lam)/np.array([math.factorial(x) for x in xvals])
 
 
 #####lmfit wrappers###############

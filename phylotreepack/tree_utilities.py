@@ -1,4 +1,5 @@
 from ghseqdb import seqdbutils #requires that biodb package is installed
+import pandas as pd
 def remove_similars(etetree,cutoff,ghdbpathstr=None,pwidpathstr=None,keepaccs=[],keeporgs=[]):
     #first delete iff one has no activity data and no gene data
     t=etetree.copy()
