@@ -88,6 +88,9 @@ class ITCDataset:
         self.titrationdf=None
         self.mact=1.0
         self.lact=1.0
+        self.mname=None
+        self.lname=None
+        self.exp_notes=None #any relevant notes or special about this expt? (stopped early)
 
         self.fit_Ka=None
         self.fit_DelH=None
@@ -107,6 +110,8 @@ class ITCDataset:
         self.stored_file_path=None
         jfname=Path(self.fname).stem
         self.stored_file_path=Path(fdirpathstr) / f'{jfname}.json'
+    def __str__(self):
+        return 'hi'
 
     def adjust_peaks(self,start_injnum=1):
         self.peak_figs=[itcpeaks.make_guided_figure(self.injection_peaks[x],injnum=x+1) for x in range(len(self.injection_peaks))]
@@ -299,6 +304,12 @@ class ITCDataset:
         #store_dict['fit_stoich']=self.fit_stoich
         store_dict['xs_power']=self.tracedf.xs_power.values.tolist()
         store_dict['smooth_powerbl']=self.tracedf.xs_power.values.tolist()
+        if self.lname is not None:
+            store_dict['lname']=self.lname
+        if self.mname is not None:
+            store_dict['mname']=self.mname
+        if self.exp_notes is not None:
+            store_dict['exp_notes']=self.exp_notes
 
         store_dict['injection_peaks']={}
         for injpeak in self.injection_peaks:
@@ -327,8 +338,11 @@ class ITCDataset:
 
     def update_with_stored_vals(self):
         store_dict={}
+        store_dict.setdefault('lname',None)
+        store_dict.setdefault('mname',None)
+        store_dict.setdefault('exp_notes',None)
         with open(self.stored_file_path,'r') as f:
-            store_dict=json.load(f)
+            store_dict.update(json.load(f))
         self.tracedf.smooth_powerbl=np.array(store_dict['smooth_powerbl'])
         self.tracedf.xs_power=np.array(store_dict['xs_power'])
         self.syrconc=store_dict['syrconc']
@@ -336,7 +350,10 @@ class ITCDataset:
         self.mtot0=store_dict['mtot0']
         self.mact=store_dict['mact']
         self.lact=store_dict['lact']
-        #self.fit_Ka=store_dict['fit_Ka']
+        self.lname=store_dict['lname']
+        self.mname=store_dict['mname']
+        self.exp_description=store_dict['exp_notes']
+       #self.fit_Ka=store_dict['fit_Ka']
         #self.fit_DeH=store_dict['fit_DelH']
         #self.fit_stoich=store_dict['fit_stoich']
         for injpeak in self.injection_peaks:

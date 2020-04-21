@@ -26,7 +26,7 @@ class injection:
     seconds:Iterable
     power:Iterable
 
-def readitc(fpathstr):
+def _readitc(fpathstr):
     """
     returns list of injections as [@dataclass_injection]
 
@@ -112,7 +112,7 @@ def loaditc(fpathstr,fdir=None,cachedfpathdir='itc_saved_data',reset_titration=F
         fpath=fpath / fpathstr
     else:
         fpath=Path(fpathstr)
-    expdeets,injections=readitc(fpath)
+    expdeets,injections=_readitc(fpath)
     #now look for an existing
     #filename=fpath.name
 

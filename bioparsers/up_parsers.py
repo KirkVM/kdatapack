@@ -9,8 +9,9 @@ class Uniprot_ProteinEntry:
         self.name=None
         self.description=None
         self.cazy_motifs=[]
-        self.pfam_motifs=[]
         self.ecs=[]
+        #not implemented
+        #self.pfamsomething
         #above is currently filled in by biopython
         #below is filled in by my parsing
         self.functions=None
@@ -19,6 +20,8 @@ class Uniprot_ProteinEntry:
         self.other_references=None
         self.kinetic_params=None
         self.exp_evidences=None
+        self.pfam_matches=None
+        self.dbseqs=None
         self.soup=None #as utility attaching extracted page to this field
 
         #currently not implemented
@@ -40,6 +43,12 @@ class Uniprot_ProteinEntry:
                 self.cazy_motifs.append(dbval)
             if dbname.lower()=='ec':
                 self.ecs.append(dbval)
+    def acc_info_string(self):
+        retstr=self.uniprot_id
+        for d in self.dbseqs:
+            if d.type.lower() in ['embl','genbank','ddbj'] and d.accession is not None:
+                retstr+=f', {d.accession}'
+        return retstr
 
 #class Activity:
 #    def __init__(self,evidx,)
@@ -127,12 +136,19 @@ class EnzActivity:
         self.evidence_index=[int(x) for x in reactxml['evidence'].split()] #can be more than one!
         self.text=reactxml.text
         self.ec=None
+        self.dois=[]
         #self.?=None #are there other relevant dbreference types?
         for dbref in reactxml.find_all ('dbreference'):
             if dbref['type'].lower()=='ec':
                 assert (self.ec is None),'2 ecs in a single reaction???'
                 self.ec=dbref['id']
-
+    def __str__(self):
+        retstr=f'Activity ec: {self.ec}\n'
+        retstr+=f'Details: {self.text}'
+        if self.dois is not None:
+            retstr+=f'article DOIs: {self.dois}\n'
+        return retstr
+#
 class EvidenceSource:
     def __init__(self,evxml):
         self.evidence_index=int(evxml.attrs['key'])
@@ -155,6 +171,34 @@ class EvidenceSource:
             self.osrc_dict[dbattrdict['type']]=dbattrdict['id']
 
 #description='Mannan endo-1,4-beta-mannosidase', dbxrefs=['BRENDA:3.2.1.78', 'BioCyc:RMAR518766:G1GGK-18-MONOMER', 'CAZy:CBM35', 'CAZy:GH26', 'DOI:10.1007/s002530000351', 'DOI:10.4056/sigs.46736', 'EC:3.2.1.78', 'EMBL:CP001807', 'EMBL:X90947', 'EnsemblBacteria:ACY46925', 'GO:GO:0006080', 'GO:GO:0016985', 'GO:GO:0030246', 'Gene3D:2.60.120.260', 'HOGENOM:CLU_016930_1_1_10', 'InterPro:IPR000805', 'InterPro:IPR005084', 'InterPro:IPR008979', 'InterPro:IPR017853', 'InterPro:IPR022790', 'InterPro:IPR026444', 'KEGG:rmr:Rmar_0016', 'KO:K01218', 'NCBI Taxonomy:518766', 'OMA:WGWYLID', 'OrthoDB:669354at2', 'PANTHER:PTHR40079', 'PIR:T10748', 'PRINTS:PR00739', 'PROSITE:PS51175', 'PROSITE:PS51764', 'Pfam:PF02156', 'Proteomes:UP000002221', 'PubMed:10919332', 'PubMed:21304669', 'RefSeq:WP_012842537.1', 'SMR:P49425', 'STRING:518766.Rmar_0016', 'SUPFAM:SSF49785', 'SUPFAM:SSF51445', 'Swiss-Prot:D0MK12', 'Swiss-Prot:MANA_RHOM4', 'Swiss-Prot:P49425', 'TIGRFAMs:TIGR04183', 'eggNOG:COG4124', 'eggNOG:ENOG4105D3P'])
+class PfamMatch:
+    def __init__(self,pxml):
+        self.accession=pxml.attrs['id']
+        self.name=None
+        self.num_matches=1
+        for propxml in pxml.find_all('property'):
+            if propxml.attrs['type'].lower()=='entry name':
+                self.name=propxml.attrs['value']
+            if propxml.attrs['type'].lower()=='match status':
+                self.num_matches=int(propxml.attrs['value'])
+    def __str__(self):
+        retstr=self.accession
+        retstr+=f' ({self.name})'
+        if self.num_matches>1:
+            retstr+=f' (x{self.num_matches})'
+        return retstr
+
+class DBSequence:
+    def __init__(self,sxml):
+        self.type=sxml.attrs['type'] #EMBL, Genbank,...
+        self.id=sxml.attrs['id']
+        self.accession=None
+        self.otherinfo_dicts=[]
+        for propxml in sxml.find_all('property'):
+            if propxml.attrs['type'].lower()=='protein sequence id':
+                self.accession=propxml.attrs['value']
+            else:
+                self.otherinfo_dicts.append(propxml.attrs) 
 
 
 def parse_uniprot_xml(accession):
@@ -209,6 +253,18 @@ def parse_uniprot_xml(accession):
     ev_srcxmls= [x  for x in evxmls if 'source' in list(y.name for y in x.descendants)]
     for evxml in ev_srcxmls:
         allsrc_evidences.append(EvidenceSource(evxml))
+    ######Parse domain annotations###########
+    pfams=[]
+    pfamxmls=[x for x in soup.find_all('dbreference') if \
+                (x.attrs['type'].lower()=='pfam' and 'property' in [y.name for y in x.children])]
+
+    for pxml in pfamxmls:
+        pfams.append(PfamMatch(pxml))
+    #####Parse alternative accession codes for sequence######
+    dbseqs=[]
+    dbseqxmls=[x for x in soup.find_all('dbreference') if x.attrs['type'].lower() in ['embl','genbank','ddbj']]
+    for dbseqxml in dbseqxmls:
+        dbseqs.append(DBSequence(dbseqxml))
 
     #add my parsed data to the upe
     upe.journal_references=litrefs
@@ -217,6 +273,8 @@ def parse_uniprot_xml(accession):
     upe.activities=activities
     upe.kinetic_params=kps
     upe.exp_evidences=allsrc_evidences
+    upe.pfam_matches=pfams
+    upe.dbseqs=dbseqs
     #now connect journals to dois
     for exp_ev in upe.exp_evidences:
         for jref in upe.journal_references:
@@ -228,8 +286,10 @@ def parse_uniprot_xml(accession):
         for exp_ev in upe.exp_evidences:
             if exp_ev.evidence_index in kp.evidence_index:
                 kp.dois.append(exp_ev.doi)
-#                    print('match')
-#            print(exp_ev.evidence_index)
+    for ca in upe.activities:
+        for exp_ev in upe.exp_evidences:
+            if exp_ev.evidence_index in ca.evidence_index:
+                ca.dois.append(exp_ev.doi)
     return upe
 #b=example_ref.citation.type
 #for dbref in example_ref.find_all('dbreference'):
