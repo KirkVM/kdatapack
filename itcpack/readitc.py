@@ -17,6 +17,7 @@ class expdetails:
     syringe_lconc:float
     cell_mstartconc: float
     cell_volume: float
+    set_temp: float
 @dataclass
 class injection:
     injnum:float
@@ -49,12 +50,16 @@ def _readitc(fpathstr):
     #scan through file-- looking for expdetails in header section (currently just syrconc,mconc,cellvol)
     expdRE=re.compile('#\s+([\d.]+)\s+')
     expdvals=[]
+    exptemp=None
     for lnum,l in enumerate(lines):
-        if lnum<injectspecs[-1].lnum:continue
+        if lnum==3:
+            exptemp=float(l.split()[1].strip())
+        elif lnum<injectspecs[-1].lnum:
+            continue
         expdobj=expdRE.match(l)
         if expdobj:
             expdvals.append(expdobj.group(1))
-    expd=expdetails(*[float(x)*1e-3 for x in [expdvals[1],expdvals[2],expdvals[3]] ])
+    expd=expdetails(*[float(x)*1e-3 for x in [expdvals[1],expdvals[2],expdvals[3]] ],exptemp)
     #now scan through file and find lines indicating a new injection (start with '@')
     inj_initRE=re.compile('@(\d+)(,([\d.]+),([\d.]+)){0,1}')
     injection_primers=[]
@@ -105,20 +110,24 @@ def _readitc(fpathstr):
     return expd,injections
 
 #def loaditc(fpathstr,fdir=None,cachedfpathdir='same',cachedfpathname='saved_itc.thermodynamics'):
-def loaditc(fpathstr,fdir=None,cachedfpathdir='itc_saved_data',reset_titration=False):#,cachedfpathname='saved_itc.thermodynamics'):
+def loaditc(fname,fdirs=['.','rawdata'],cachedfldrstr='itc_saved_data',reset_titration=False):#,cachedfpathname='saved_itc.thermodynamics'):
     '''runs readitc and returns an ITCDataset'''
-    if fdir is not None:
-        fpath=Path(fdir)
-        fpath=fpath / fpathstr
-    else:
-        fpath=Path(fpathstr)
+    matching_paths=[]
+    for fdir in fdirs:
+        basepath=Path(fdir)
+        matching_paths.extend(list(basepath.rglob(fname)))
+    matching_paths=list(set(matching_paths))
+    assert len(matching_paths)<2,f"ambiguous filename? More than 1 match {matching_paths}"
+    assert len(matching_paths)>0,f"can't find file {fname}"
+    fpath=matching_paths[0]
     expdeets,injections=_readitc(fpath)
     #now look for an existing
     #filename=fpath.name
 
     #if cachedfpathdir=='same':
     itcd=fititc.ITCDataset(expdeets,injections,fpath.name)
-    cachedfpath=fpath.parent / cachedfpathdir / f'{fpath.stem}.json'
+    cachedfldrpath= Path(cachedfldrstr)
+    cachedfpath=cachedfldrpath.joinpath(f'{fpath.with_suffix("").name}.json')
     if cachedfpath.exists() and reset_titration==False:
         itcd.extract_peaks()
         itcd.update_with_stored_vals()

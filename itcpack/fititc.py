@@ -111,7 +111,11 @@ class ITCDataset:
         jfname=Path(self.fname).stem
         self.stored_file_path=Path(fdirpathstr) / f'{jfname}.json'
     def __str__(self):
-        return 'hi'
+        retstr=f'{self.syrconc*1e3}"mM" {self.lname} -> {self.mtot0*1e6}"uM" {self.mname}\n'
+        retstr+=f'{self.titrationdf.shape[0]} injections (avg = {self.titrationdf.injvol[1:].mean()*1e6:.1f}uL)\n'
+        retstr+=f'{self.expdetails.set_temp}C (set)\n'
+        retstr+=f'Notes: {self.exp_notes}'
+        return retstr
 
     def adjust_peaks(self,start_injnum=1):
         self.peak_figs=[itcpeaks.make_guided_figure(self.injection_peaks[x],injnum=x+1) for x in range(len(self.injection_peaks))]
