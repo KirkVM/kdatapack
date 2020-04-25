@@ -111,7 +111,7 @@ class ITCDataset:
         jfname=Path(self.fname).stem
         self.stored_file_path=Path(fdirpathstr) / f'{jfname}.json'
     def __str__(self):
-        retstr=f'{self.syrconc*1e3}"mM" {self.lname} -> {self.mtot0*1e6}"uM" {self.mname}\n'
+        retstr=f'{self.syrconc*1e3:2.3g}"mM" {self.lname} -> {self.mtot0*1e6:.3g}"uM" {self.mname}\n'
         retstr+=f'{self.titrationdf.shape[0]} injections (avg = {self.titrationdf.injvol[1:].mean()*1e6:.1f}uL)\n'
         retstr+=f'{self.expdetails.set_temp}C (set)\n'
         retstr+=f'Notes: {self.exp_notes}'
@@ -356,7 +356,7 @@ class ITCDataset:
         self.lact=store_dict['lact']
         self.lname=store_dict['lname']
         self.mname=store_dict['mname']
-        self.exp_description=store_dict['exp_notes']
+        self.exp_notes=store_dict['exp_notes']
        #self.fit_Ka=store_dict['fit_Ka']
         #self.fit_DeH=store_dict['fit_DelH']
         #self.fit_stoich=store_dict['fit_stoich']
