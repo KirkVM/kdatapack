@@ -119,21 +119,27 @@ class KineticParam:
 
 class EnzFunction:
     def __init__(self,funcxml):
+        self.evidence_index=[]
         allchildren=list(set([x.name for x in funcxml.children]))
         allchildren.remove(None)
         assert(len(allchildren)==1), "should only be one field (and next step enforces that it is text)"
         functexts=funcxml.find_all('text')
         assert (len(functexts)==1),"more than 1 reaction here"
         func_textxml=functexts[0]
-        self.evidence_index=[int(x) for x in func_textxml['evidence'].split()] #can be more than one!
+        if 'evidence' in list(func_textxml.attrs.keys()):# not None:
+            self.evidence_index=[int(x) for x in func_textxml['evidence'].split()] #can be more than one!
         self.text=func_textxml.text
 
 class EnzActivity:
     def __init__(self,funcxml):
+        self.evidence_index=[]
         reacts=funcxml.find_all('reaction')
         assert (len(reacts)==1),"more than 1 reaction here"
         reactxml=reacts[0]
-        self.evidence_index=[int(x) for x in reactxml['evidence'].split()] #can be more than one!
+        if 'evidence' in list(reactxml.attrs.keys()):# not None:
+            self.evidence_index=[int(x) for x in reactxml['evidence'].split()] #can be more than one!
+#        self.evidence_index=[int(x) for x in reactxml['evidence'].split()] #can be more than one!
+        self.evidence_sources=[]
         self.text=reactxml.text
         self.ec=None
         self.dois=[]
@@ -235,6 +241,8 @@ def parse_uniprot_xml(accession):
         if annotation['type']=='biophysicochemical properties':
             #currently only pulling kinetics. Should be just one (potentially multiple KM/Kcat entries w/in)
             kins=annotation.find_all('kinetics') 
+            if len(kins)==0: #property is something diff
+                continue
             assert(len(kins)==1),'more than 1 kinetics field?'
             kinxmls=[x for x in kins[0].children if x.name!=None]
             for kinxml in kinxmls:
@@ -250,8 +258,9 @@ def parse_uniprot_xml(accession):
     #######Parse evidence sources#########
     allsrc_evidences=[]
     evxmls=soup.find_all('evidence')
-    ev_srcxmls= [x  for x in evxmls if 'source' in list(y.name for y in x.descendants)]
+    ev_srcxmls= [x  for x in evxmls if 'dbreference' in list(y.name for y in x.descendants)]
     for evxml in ev_srcxmls:
+        #print(evxml)
         allsrc_evidences.append(EvidenceSource(evxml))
     ######Parse domain annotations###########
     pfams=[]
@@ -289,7 +298,8 @@ def parse_uniprot_xml(accession):
     for ca in upe.activities:
         for exp_ev in upe.exp_evidences:
             if exp_ev.evidence_index in ca.evidence_index:
-                ca.dois.append(exp_ev.doi)
+                ca.dois.append(exp_ev.doi) #this is a convenience shortcut. full evsrc linked in next line
+                ca.evidence_sources.append(exp_ev)
     return upe
 #b=example_ref.citation.type
 #for dbref in example_ref.find_all('dbreference'):

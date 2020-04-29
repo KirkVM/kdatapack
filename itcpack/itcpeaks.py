@@ -110,6 +110,8 @@ class ITCInjectionPeak:
 
     def create_guided_bl(self):
         steps50sec_idx=[int(x) for x in np.linspace(0,len(self.seconds)-1,int(self.seconds[-1]/50))]#guide pts ~every 50seconds
+        if len(steps50sec_idx)<=2: #make sure there are at least 3 guide points
+            steps50sec_idx=[int(x) for x in np.linspace(0,len(self.seconds)-1,3)] #the ensuring override
         steps8_idx=[int(x) for x in np.linspace(0,len(self.seconds)-1,8)] #8 evenly-spaced guide points
         self.guided_bp_indices=[max(x,y) for x,y in zip(steps50sec_idx[:10],steps8_idx)]#choose option with bigger step size
         self.guided_bp_seconds=[self.seconds[x] for x in self.guided_bp_indices]
