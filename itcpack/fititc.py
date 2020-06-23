@@ -261,7 +261,7 @@ class ITCDataset:
         params = Parameters()
         params.add('logKa', value=logKa,min=3,max=7)
         params.add('DelH', value=DelH)
-        params.add('Mact', value=Mact,min=0.9,max=2.5)
+        params.add('Mact', value=Mact,min=0.1,max=2.5)
         #params.add('Mact', value=Mact,min=0.5,max=5.5)
         params.add('DilHeat', value=DilHeat,min=-2000,max=2000)
 #        params.add('DilHeat', value=0,vary=False)#,min=-1000,max=1000)

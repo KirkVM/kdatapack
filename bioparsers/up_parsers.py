@@ -294,11 +294,13 @@ def parse_uniprot_xml(accession):
     for kp in upe.kinetic_params:
         for exp_ev in upe.exp_evidences:
             if exp_ev.evidence_index in kp.evidence_index:
-                kp.dois.append(exp_ev.doi)
+                if exp_ev.doi is not None:
+                    kp.dois.append(exp_ev.doi)
     for ca in upe.activities:
         for exp_ev in upe.exp_evidences:
             if exp_ev.evidence_index in ca.evidence_index:
-                ca.dois.append(exp_ev.doi) #this is a convenience shortcut. full evsrc linked in next line
+                if exp_ev.doi is not None:
+                    ca.dois.append(exp_ev.doi) #this is a convenience shortcut. full evsrc linked in next line
                 ca.evidence_sources.append(exp_ev)
     return upe
 #b=example_ref.citation.type

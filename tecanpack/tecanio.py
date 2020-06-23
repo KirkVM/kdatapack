@@ -66,6 +66,7 @@ class WellReading:
     buffername: str = None
     bufferconc: float = None
     bufferconc_units: str = None
+    bsaconc: float = None
     solution_description_string: str = None
     biorepid: str = None #uuid (hex-rep) reflecting uniquely prepared biosamples
     #substrate settings
@@ -105,7 +106,7 @@ class WellReading:
     standardstock_conc_units: float = None
     standard_description_string: str = None
 
-def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
+def read_tecan_excel(ifpath,shname,plate_header_row,plate_header_col):
     skiprows=list(range(plate_header_row-1))
     if plate_header_col=='A':
         usecols=range(13)
@@ -113,6 +114,10 @@ def read_tecan_excel(ifpath,shname,plate_header_row=23,plate_header_col="A"):
         raise NotImplementedError("column offset other than A not yet implemented")
     platedf=pd.read_excel(ifpath,skiprows=skiprows,nrows=8,usecols=usecols,index_col=0,sheet_name=shname)
     #check structure
+    try:
+        platedf.columns = platedf.columns.to_series().apply(int)
+    except:
+        print('couldnt convert columns to int. Is row/col set correctly?')
     assert (list(platedf.index)==['A','B','C','D','E','F','G','H'] and \
             list(platedf.columns)==[1,2,3,4,5,6,7,8,9,10,11,12]), \
             "excel df read-in indexing incorrect. Is row/col set correctly?"
@@ -221,7 +226,7 @@ class TecanPlate:
         self.welldatadf=None
         self.ifpath=None
         self.expsheet=None
-    def read_excel_sheet(self,ifpath,shname,plate_header_row=23,plate_header_col='A'):
+    def read_excel_sheet(self,ifpath,shname,plate_header_row='default',plate_header_col='default'):
         """
         Reads excel sheet into the class
 
@@ -230,12 +235,21 @@ class TecanPlate:
             shname: sheet name in excel file 
         
         Keyword arguments:
-            kwargs to pass.... (needs implementation) 
+            plate_header_col: excel column value of first data column
+                    (eg, 'A','B',etc... default 'default' translates to 'A')
+            plate_header_row: excel row value of first data row
+                    (eg, 23,24,etc... default 'default' translates to 23 (if before 3/6/2020) else 32)
         """
+        if plate_header_col=='default':
+            plate_header_col='A'
+        if plate_header_row=='default':
+            if self.defaultsdict['expdate']>datetime.date(2020,3,5):
+                plate_header_row=32 #using Spark
+            else:
+                plate_header_row=23 #using M1000
         self.ifpath=ifpath
         self.expsheet=shname
-        self.exceldf=read_tecan_excel(ifpath,shname,plate_header_row=plate_header_row,
-                                        plate_header_col=plate_header_col)
+        self.exceldf=read_tecan_excel(ifpath,shname,plate_header_row,plate_header_col)
         #automatically create if create_layout has already run through
         if len(self.welldict)>0:
             self.make_welldatadf()
@@ -244,8 +258,9 @@ class TecanPlate:
                       active_cols=[1,2,3,4,5,6,7,8,9,10,11,12],
                       skipwells=[],repeat_measurements=[],itermethod='by_row',
                       enames=None,econcs=None,snames=None,sconcs=None,standardnames=None,standardconcs=None,
-                      rxnphs=None,rxntemps=None,rxntimes=None,buffernames=None,rxnvols=None,
-                      predvlp_dlnfactors=None,postdvlp_dlnfactors=None,sbarcodes=None):
+                      rxnphs=None,rxntemps=None,rxntimes=None,buffernames=None,bufferconcs=None,rxnvols=None,
+                      predvlp_dlnfactors=None,postdvlp_dlnfactors=None,sbarcodes=None,
+                      bsaconcs=None):
         """
         Keyword arguments:
         active_rows: list of row letters in the list (default ['A'-'H'])
@@ -268,6 +283,7 @@ class TecanPlate:
         rxnvols: list of float rxnvols (default = None)
         predvlp_dlnfactors: list of dilution factor before develop step (default = None)
         postdvlp_dlnfactors: list of dilution factor post develop step (default = None)
+        bsaconcs: list of (final) bsa concentration in mgmL (default = None)
         """
  
         if itermethod not in ['by_row','by_column']:
@@ -280,10 +296,10 @@ class TecanPlate:
         #now let's check
         varied_dict={'ename':enames,'econc':econcs,'sname':snames,'sconc':sconcs,
                      'standardname':standardnames,'standardconc':standardconcs,
-                     'rxnph':rxnphs,'rxntemp':rxntemps,'rxntime':rxntimes,'buffername':buffernames,
-                     'rxnvol':rxnvols,
+                     'rxnph':rxnphs,'rxntemp':rxntemps,'rxntime':rxntimes,
+                     'buffername':buffernames,'bufferconc':bufferconcs,'rxnvol':rxnvols,
                      'predvlp_dlnfactor':predvlp_dlnfactors,'postdvlp_dlnfactor':postdvlp_dlnfactors,
-                     'sbarcode':sbarcodes}
+                     'sbarcode':sbarcodes,'bsaconc':bsaconcs}
         for ckey in list(varied_dict.keys()):
             if varied_dict[ckey] is None:
                 del varied_dict[ckey]
@@ -356,7 +372,7 @@ class TecanPlate:
         #make sure proper fields present in all cases
         #two-way requirements---
         noebgdf=self.welldatadf[self.welldatadf.ename!='wge']
-        for rtype in [['sconc','sname'],['econc','ename'],['standardname','standardconc']]:
+        for rtype in [['sconc','sname'],['econc','ename'],['standardname','standardconc'],['buffername','bufferconc']]:
             assert(noebgdf[noebgdf[rtype[0]].isnull()][rtype[1]].dropna().shape[0]==0),\
                     f"{rtype[1]} value is set for a well with no {rtype[0]}. Plate {self.ifpath.name}-{self.expsheet}"
             assert(noebgdf[noebgdf[rtype[1]].isnull()][rtype[0]].dropna().shape[0]==0),\
