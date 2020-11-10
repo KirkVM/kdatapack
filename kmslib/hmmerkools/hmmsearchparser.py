@@ -103,7 +103,7 @@ class HMMERSearchMotif:
     def readin(self,acc_mode="simple"):
 #        print('reading in')
         accRE=re.compile("([a-z]+)\|([0-9a-zA-Z_\.]+)\|")
-        smpl_accRE=re.compile("([0-9A-Z_\.]+)")
+        smpl_accRE=re.compile("([0-9A-Za-z_\.]+)")
         fltstrgrp="([0-9e\.\-\+]+)"
 #        smrestr="\s*"
         smrestr="\s*(\d[0-9e\.\-\+]*)\s+"
