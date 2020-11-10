@@ -35,7 +35,7 @@ def assign_rxn_types(df):
                  sblank_status=lambda x: (x.sname.isnull()==False) & (x.ename.isnull()) & (x.standardname.isnull()),
                  calstd_status=lambda x: (x.standardname.isnull()==False) & (x.sname.isnull()) & (x.ename.isnull()),
                  ebg_status=lambda x: (x.econc.isnull()) & (x.standardname.isnull()) & (x.ename=='wge'),
-                 bsabg_status=lambda x: (x.econc.isnull()) & (x.sconc.isnull()) & (x.standardname.isnull()) & (x.bsaconc!=None),
+                 bsablank_status=lambda x: (x.econc.isnull()) & (x.sconc.isnull()) & (x.standardname.isnull()) & (x.bsaconc!=None),
                  rxn_status=lambda x: (x.sname.isnull()==False) & (x.sconc>0) & (x.ename.isnull()==False) & (x.econc>0))
                  #sbg_status=lambda x: (x.sname.isnull()) & (x.standardname.isnull()) & (x.sname=='?'))
 #    df=df.assign()
@@ -93,16 +93,19 @@ def calc_bca_ebgconverter(df,rtype='slope'):
         #   (2) get correct to get into one curve with 5/105 and 1
         #   (3) fit line to get avg re_yield vs mgmL_conc equation
 
-def calc_re_yield(dfrow,measure_field='measurement',bca_converter=None,dns_converter=None):
+def calc_re_yield(dfrow,measure_field='measurement',converter_dict=None):
     if dfrow.calstd_status==True:
         return np.nan
-#        self.alldf.re_yield=self.alldf.measurement.where((self.alldf.detection=='DNS') & (self.alldf.calstd_status==False)).\
     assert(dfrow.detection in ['DNS','BCA'])
     if dfrow.detection=='DNS':
-        return(dns_converter(dfrow[measure_field]))
+        converter=converter_dict['DNS']
     elif dfrow.detection=='BCA':
-        return(bca_converter(dfrow[measure_field]))
-#        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter)
+#        if np.isclose(dfrow.predvlp_dlnfactor,5/105):
+        if dfrow.predvlp_dlnfactor<=5/105:
+            converter=converter_dict['BCApddf21']
+        elif np.isclose(dfrow.predvlp_dlnfactor,0.5):
+            converter=converter_dict['BCApddfTWO']
+    return(converter(dfrow[measure_field]))
 
 def calc_sbg_yield(dfrow,slopedict):#,sname,sctrl_status):
     if dfrow.sname is not None:
@@ -118,6 +121,117 @@ def calc_ebg_yield(dfrow,eslope):#,sname,sctrl_status):
             return 0
     else:
         return np.nan
+
+
+class CAZyExperiment2:
+    def __init__(self,selected_df,alldf=None,expname=None):
+        """
+        Takes a tecan dataframe, makes a copy and adds fields needed for activity calculations (inc baseline subtractions) 
+
+        Arguments:
+        selected_df: the dataframe
+
+        Kewyord arguments:
+        alldf: the dataframe with all activities (default None)
+        expname: name for this experiment (otherwise use date)- default None
+       """
+        #assign_rxn_types adds fields: eblank_status,sblank_status,calstd_status,ebg_status,rxn_status
+        #add_interpreted_columns adds fields: relative_dlnfactor,econc_mgmL_reldvlpadj,econc_molar,reldvlpadj,
+        #                               econc_reldvlpadj,sconc_reldvlpadj,standardconc_reldvlpadj    
+        #alldf does not need rxn_types???
+        self.expdf=assign_rxn_types(selected_df.copy())
+        self.expdf=add_interpreted_columns(self.expdf)
+        if alldf is not None:
+            self.alldf=assign_rxn_types(alldf.copy())
+            self.alldf=add_interpreted_columns(self.alldf)
+        if expname is not None:
+            self.expname=expname
+        else:
+            self.expname=str(self.expdf.expdate.unique()[0])
+        self.default_calibration_standard={'DNS':{'slope':0.45,'int':0.05}}
+        self.default_calibration_standard.update({'BCApddf21':{'slope':3.36,'int':0.23}})
+        self.default_calibration_standard.update({'BCApddfTWO':{'slope':0.61,'int':0.14}})
+        self.base_bca_predvlp_dlnfactor=5/105
+        #default ctrl slopes are in units of  (mg/mL re_yield equivalents)/(mg/mL e or s)
+        self.default_sctrl_slopes={'cmc':0.009,'corn stover':0.000,'galactomannan':0.000,'lichenan':0.007,
+                                   'mannan':0.004,'pasc':0.000,'poplar':0.000,'sorghum':0.000,'switchgrass':0.000,
+                                   'xylan':0.007,'xyloglucan':0.005}
+        self.default_ectrl_slope=0.36 
+        self.default_ebg=0.043
+        self.default_ebg_slopes={'xylan':.008}
+
+    def calc_yields(self,colname='re_yield',subset_selections={},calibration_standard='default',\
+                    s_background='default',e_background='default'):
+        """
+        calculates yields- calcs necessary subtractions etc 
+
+        Kewyord arguments:
+        colname: the name for the reducing end yield column
+        subset_selections: 
+        calibration_standard: (default = 'default', ie predetermined values from all data)
+        s_background: (default = 'default', ie predetermined values from all data)
+        e_background: (default = 'default', ie predetermined values from all data)
+       """
+ 
+        assert (calibration_standard in ['default'] and s_background in ['default'] \
+                and e_background in ['default','recalculate']),\
+            "illegal option for calibration_standard, s_background or e_background"
+        #1. Build calibration standard converter then calculate re yields
+        yldconverter_dict={}
+        if calibration_standard=='default':
+            yldconverter_dict['DNS']=build_simple_yldconverter(\
+                self.default_calibration_standard['DNS']['int'],self.default_calibration_standard['DNS']['slope'])
+            yldconverter_dict['BCApddf21']=build_simple_yldconverter(\
+                self.default_calibration_standard['BCApddf21']['int'],self.default_calibration_standard['BCApddf21']['slope'])
+            yldconverter_dict['BCApddfTWO']=build_simple_yldconverter(\
+                self.default_calibration_standard['BCApddfTWO']['int'],self.default_calibration_standard['BCApddfTWO']['slope'])
+        self.expdf=cleandf(self.expdf)
+        self.expdf['re_yield']=self.expdf.apply(calc_re_yield,measure_field='measurement',converter_dict=yldconverter_dict,axis=1)
+
+'''
+        self.alldf=cleandf(self.alldf)
+        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,measure_field='measurement',\
+                                            bca_converter=BCApddf21_YldConverter,dns_converter=DNS_YldConverter,axis=1)
+
+        #new strategy here----
+        #1. create an ebgfunc column---
+                #u
+        #2. Get default background subtraction converters---
+        #ebl_slope is avg for all enzymes, sbldict is slopes for all 
+        if e_background=='default':
+            self.ebl_slope=self.default_ectrl_slope #currently 0.36 (see constructor)
+        elif e_background=='recalculate':
+#            self.ebg_converter=calc_bca_ebgconverter(self.alldf)
+            self.ebl_slope=calc_bca_ebgconverter(self.alldf)
+        if s_background=='default':
+            self.sbldict=self.default_sctrl_slopes
+        #COULD RUN CHECK HERE THAT SBLANK CONTROL MATCHES DEFAULT VALS
+        #2b. get experiment-level values....
+
+
+        #3. Calculate re_yields and rxn_yields
+        self.expdf['re_yield_1X']=self.expdf.apply(lambda x:x.re_yield/x.relative_dlnfactor,axis=1)
+        self.expdf=self.expdf.assign(rxn_yield=np.nan,sbg_yield=np.nan,ebg_yield=np.nan)
+        
+        self.expdf.sbg_yield= self.expdf.apply(calc_sbg_yield,args=(self.sbldict,),axis=1)
+        self.expdf.ebg_yield= self.expdf.apply(calc_ebg_yield,args=(self.ebl_slope,),axis=1)
+        self.expdf.rxn_yield=self.expdf.where(self.expdf.rxn_status).apply(lambda x:x.re_yield_1X-x.sbg_yield-x.ebg_yield,axis=1)
+'''
+
+        #self.expdf['measurement_1X']=self.expdf.apply(lambda x:x.measurement/x.relative_dlnfactor,axis=1)
+        #self.expdf['re_yield_1X']=self.expdf.apply(calc_re_yield,measure_field='measurement_1X',
+        #                            bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
+
+#        self.expdf.sbg_yield=self.expdf.apply(lambda x:self.sbldict[x.sname]*x.sconc,axis=1).where(self.expdf.sconc.notnull())
+
+#        self.expdf.sbg_yield=self.expdf.apply(lambda x:self.sbldict[x.sname]*x.sconc,axis=1).where(self.expdf.sconc.notnull())
+#        self.expdf.sbg_yield= self.expdf.where(self.expdf.sconc.notnull()).apply(lambda x:self.sbldict[x.sname]*x.sconc if np.isnan(x.sname) else np.nan,axis=1)
+
+
+
+
+
+
 
 
 
@@ -149,8 +263,12 @@ class CAZyExperiment:
             self.expname=expname
         else:
             self.expname=str(self.expdf.expdate.unique()[0])
+        #self.default_calibration_standard={'DNS':{'slope':0.45,'int':0.05}}
+        #self.default_calibration_standard.update({'BCA':{'slope':3.36,'int':0.23}})
+#
         self.default_calibration_standard={'DNS':{'slope':0.45,'int':0.05}}
-        self.default_calibration_standard.update({'BCA':{'slope':3.36,'int':0.23}})
+        self.default_calibration_standard.update({'BCApddf21':{'slope':3.36,'int':0.23}})
+        self.default_calibration_standard.update({'BCApddfTWO':{'slope':0.61,'int':0.14}})
         self.base_bca_predvlp_dlnfactor=5/105
         #default ctrl slopes are in units of  (mg/mL re_yield equivalents)/(mg/mL e or s)
         self.default_sctrl_slopes={'cmc':0.009,'corn stover':0.000,'galactomannan':0.000,'lichenan':0.007,
@@ -177,17 +295,25 @@ class CAZyExperiment:
                 and e_background in ['default','recalculate']),\
             "illegal option for calibration_standard, s_background or e_background"
         #1. Build calibration standard converter then calculate re yields
+        #if calibration_standard=='default':
+        #    DNS_YldConverter=build_simple_yldconverter(self.default_calibration_standard['DNS']['int'],\
+        #                                                self.default_calibration_standard['DNS']['slope'])
+        #    BCA_YldConverter=build_simple_yldconverter(self.default_calibration_standard['BCA']['int'],\
+        #                                                self.default_calibration_standard['BCA']['slope'])
+        #
+
+        yldconverter_dict={}
         if calibration_standard=='default':
-            DNS_YldConverter=build_simple_yldconverter(self.default_calibration_standard['DNS']['int'],\
-                                                        self.default_calibration_standard['DNS']['slope'])
-            BCA_YldConverter=build_simple_yldconverter(self.default_calibration_standard['BCA']['int'],\
-                                                        self.default_calibration_standard['BCA']['slope'])
+            yldconverter_dict['DNS']=build_simple_yldconverter(\
+                self.default_calibration_standard['DNS']['int'],self.default_calibration_standard['DNS']['slope'])
+            yldconverter_dict['BCApddf21']=build_simple_yldconverter(\
+                self.default_calibration_standard['BCApddf21']['int'],self.default_calibration_standard['BCApddf21']['slope'])
+            yldconverter_dict['BCApddfTWO']=build_simple_yldconverter(\
+                self.default_calibration_standard['BCApddfTWO']['int'],self.default_calibration_standard['BCApddfTWO']['slope'])
         self.expdf=cleandf(self.expdf)
-        self.expdf['re_yield']=self.expdf.apply(calc_re_yield,measure_field='measurement',\
-                                            bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
+        self.expdf['re_yield']=self.expdf.apply(calc_re_yield,measure_field='measurement',converter_dict=yldconverter_dict,axis=1)
         self.alldf=cleandf(self.alldf)
-        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,measure_field='measurement',\
-                                            bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
+        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,measure_field='measurement',converter_dict=yldconverter_dict,axis=1)
 
         #new strategy here----
         #1. create an ebgfunc column---
@@ -197,107 +323,7 @@ class CAZyExperiment:
         if e_background=='default':
             self.ebl_slope=self.default_ectrl_slope #currently 0.36 (see constructor)
         elif e_background=='recalculate':
-#            self.ebg_converter=calc_bca_ebgconverter(self.alldf)
-            self.ebl_slope=calc_bca_ebgconverter(self.alldf)
-        if s_background=='default':
-            self.sbldict=self.default_sctrl_slopes
-        #COULD RUN CHECK HERE THAT SBLANK CONTROL MATCHES DEFAULT VALS
-        #2b. get experiment-level values....
-
-
-        #3. Calculate re_yields and rxn_yields
-        self.expdf['re_yield_1X']=self.expdf.apply(lambda x:x.re_yield/x.relative_dlnfactor,axis=1)
-        self.expdf=self.expdf.assign(rxn_yield=np.nan,sbg_yield=np.nan,ebg_yield=np.nan)
-        
-        self.expdf.sbg_yield= self.expdf.apply(calc_sbg_yield,args=(self.sbldict,),axis=1)
-        self.expdf.ebg_yield= self.expdf.apply(calc_ebg_yield,args=(self.ebl_slope,),axis=1)
-        self.expdf.rxn_yield=self.expdf.where(self.expdf.rxn_status).apply(lambda x:x.re_yield_1X-x.sbg_yield-x.ebg_yield,axis=1)
-
-
-        #self.expdf['measurement_1X']=self.expdf.apply(lambda x:x.measurement/x.relative_dlnfactor,axis=1)
-        #self.expdf['re_yield_1X']=self.expdf.apply(calc_re_yield,measure_field='measurement_1X',
-        #                            bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
-
-#        self.expdf.sbg_yield=self.expdf.apply(lambda x:self.sbldict[x.sname]*x.sconc,axis=1).where(self.expdf.sconc.notnull())
-
-#        self.expdf.sbg_yield=self.expdf.apply(lambda x:self.sbldict[x.sname]*x.sconc,axis=1).where(self.expdf.sconc.notnull())
-#        self.expdf.sbg_yield= self.expdf.where(self.expdf.sconc.notnull()).apply(lambda x:self.sbldict[x.sname]*x.sconc if np.isnan(x.sname) else np.nan,axis=1)
-
-class CAZyExperiment2:
-    def __init__(self,selected_df,alldf=None,expname=None):
-        """
-        Takes a tecan dataframe, makes a copy and adds fields needed for activity calculations (inc baseline subtractions) 
-
-        Arguments:
-        selected_df: the dataframe
-
-        Kewyord arguments:
-        alldf: the dataframe with all activities (default None)
-        expname: name for this experiment (otherwise use date)- default None
-       """
-        self.expdf=selected_df.copy()
-        #assign_rxn_types adds fields: eblank_status,sblank_status,calstd_status,ebg_status,rxn_status
-        #add_interpreted_columns adds fields: relative_dlnfactor,econc_mgmL_reldvlpadj,econc_molar,reldvlpadj,
-        #                               econc_reldvlpadj,sconc_reldvlpadj,standardconc_reldvlpadj    
-        #alldf does not need rxn_types???
-        self.expdf=assign_rxn_types(self.expdf)
-        self.expdf=add_interpreted_columns(self.expdf)
-        if alldf is not None:
-            self.alldf=assign_rxn_types(alldf.copy())
-            self.alldf=add_interpreted_columns(self.alldf)
-        if expname is not None:
-            self.expname=expname
-        else:
-            self.expname=str(self.expdf.expdate.unique()[0])
-        self.default_calibration_standard={'DNS':{'slope':0.45,'int':0.05}}
-        self.default_calibration_standard.update({'BCA':{'slope':3.36,'int':0.23}})
-        self.base_bca_predvlp_dlnfactor=5/105
-        #default ctrl slopes are in units of  (mg/mL re_yield equivalents)/(mg/mL e or s)
-        self.default_sctrl_slopes={'cmc':0.009,'corn stover':0.000,'galactomannan':0.000,'lichenan':0.007,
-                                   'mannan':0.004,'pasc':0.000,'poplar':0.000,'sorghum':0.000,'switchgrass':0.000,
-                                   'xylan':0.007,'xyloglucan':0.005}
-        self.default_ectrl_slope=0.36 
-        self.default_ebg=0.043
-        self.default_ebg_slopes={'xylan':.008}
-
-    def calc_yields(self,colname='re_yield',subset_selections={},calibration_standard='default',\
-                    s_background='default',e_background='default'):
-        """
-        calculates yields- calcs necessary subtractions etc 
-
-        Kewyord arguments:
-        colname: the name for the reducing end yield column
-        subset_selections: 
-        calibration_standard: (default = 'default', ie predetermined values from all data)
-        s_background: (default = 'default', ie predetermined values from all data)
-        e_background: (default = 'default', ie predetermined values from all data)
-       """
- 
-        assert (calibration_standard in ['default'] and s_background in ['default'] \
-                and e_background in ['default','recalculate']),\
-            "illegal option for calibration_standard, s_background or e_background"
-        #1. Build calibration standard converter then calculate re yields
-        if calibration_standard=='default':
-            DNS_YldConverter=build_simple_yldconverter(self.default_calibration_standard['DNS']['int'],\
-                                                        self.default_calibration_standard['DNS']['slope'])
-            BCA_YldConverter=build_simple_yldconverter(self.default_calibration_standard['BCA']['int'],\
-                                                        self.default_calibration_standard['BCA']['slope'])
-        self.expdf=cleandf(self.expdf)
-        self.expdf['re_yield']=self.expdf.apply(calc_re_yield,measure_field='measurement',\
-                                            bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
-        self.alldf=cleandf(self.alldf)
-        self.alldf['re_yield']=self.alldf.apply(calc_re_yield,measure_field='measurement',\
-                                            bca_converter=BCA_YldConverter,dns_converter=DNS_YldConverter,axis=1)
-
-        #new strategy here----
-        #1. create an ebgfunc column---
-                #u
-        #2. Get default background subtraction converters---
-        #ebl_slope is avg for all enzymes, sbldict is slopes for all 
-        if e_background=='default':
-            self.ebl_slope=self.default_ectrl_slope #currently 0.36 (see constructor)
-        elif e_background=='recalculate':
-#            self.ebg_converter=calc_bca_ebgconverter(self.alldf)
+            #self.ebg_converter=calc_bca_ebgconverter(self.alldf)
             self.ebl_slope=calc_bca_ebgconverter(self.alldf)
         if s_background=='default':
             self.sbldict=self.default_sctrl_slopes

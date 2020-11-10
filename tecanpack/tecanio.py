@@ -474,7 +474,9 @@ class TecanPlate:
 
     def view_plate(self,inline_jupyter=True):
         reset_output()
-        hover_tool=HoverTool(names=['stuff'],tooltips=[('Well','@wellid'),('Enzyme','@enzyme'),('Substrate','@substrate'),('Standard','@standard')]
+        hover_tool=HoverTool(names=['stuff'],tooltips=[('Well','@wellid'),('Enzyme','@enzyme'),\
+                            ('Substrate','@substrate'),('Standard','@standard'),('pH','@rxnph'),\
+                            ('msr','@measurement')]\
                     )
         pscale=90
         p=figure(plot_width=12*pscale,plot_height=8*pscale,tools=[hover_tool])
@@ -533,6 +535,7 @@ class TecanPlate:
 def get_plthovers(welldfrow):
     cdict={}
     cdict['wellid']=welldfrow['wellid']
+    cdict['rxnph']=welldfrow['rxnph']
     if welldfrow.ename is not None:
         cdict['enzyme']=[f'{welldfrow["ename"].values[0]}: {welldfrow["econc"].values[0]} {welldfrow["econc_units"].values[0]}']
     else:
@@ -545,4 +548,5 @@ def get_plthovers(welldfrow):
         cdict['standard']=[f'{welldfrow["standardname"].values[0]}: {welldfrow["standardconc"].values[0]} {welldfrow["standardconc_units"].values[0]}']
     else:
         cdict['standard']=['none']
+    cdict['measurement']=welldfrow['measurement']
     return ColumnDataSource(data=cdict)
